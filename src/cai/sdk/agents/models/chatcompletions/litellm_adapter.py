@@ -8,6 +8,7 @@ Extracted from openai_chatcompletions.py [F] to reduce monolith size.
 
 from __future__ import annotations
 
+import os
 import time
 from typing import TYPE_CHECKING, Any, Literal, cast
 
@@ -66,6 +67,30 @@ async def fetch_response_litellm_openai(
     too long, truncate all tool_call ids in the messages to 40 characters
     and retry once silently.
     """
+    # For Gemini / Google AI Studio models, strip cache_control because Google Free Tier
+    # rejects cachedContents with 429 Resource Exhausted (limit=0).
+    if "gemini" in model_name.lower() or "google" in model_name.lower():
+        gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if gemini_key:
+            kwargs["api_key"] = gemini_key
+        messages = kwargs.get("messages", [])
+        cleaned_messages = []
+        for msg in messages:
+            msg_copy = dict(msg)
+            msg_copy.pop("cache_control", None)
+            content = msg_copy.get("content")
+            if isinstance(content, list):
+                new_content = []
+                for block in content:
+                    if isinstance(block, dict):
+                        b_copy = {k: v for k, v in block.items() if k != "cache_control"}
+                        new_content.append(b_copy)
+                    else:
+                        new_content.append(block)
+                msg_copy["content"] = new_content
+            cleaned_messages.append(msg_copy)
+        kwargs["messages"] = cleaned_messages
+
     try:
         if stream:
             ret = await litellm.acompletion(**kwargs)
@@ -126,8 +151,14 @@ async def fetch_response_litellm_ollama(
     can cause issues with the Ollama API, and filters to only supported params.
     """
     # Extract only supported parameters for Ollama
+    raw_model = str(kwargs.get("model", "") or "")
+    if raw_model.startswith("ollama/"):
+        raw_model = raw_model[len("ollama/"):]
+    elif raw_model.startswith("ollama_chat/"):
+        raw_model = raw_model[len("ollama_chat/"):]
+
     ollama_supported_params = {
-        "model": kwargs.get("model", ""),
+        "model": raw_model,
         "messages": kwargs.get("messages", []),
         "stream": kwargs.get("stream", False),
     }
@@ -149,11 +180,14 @@ async def fetch_response_litellm_ollama(
     }
 
     api_base = get_ollama_api_base()
+    if not api_base.endswith("/v1"):
+        api_base = api_base.rstrip("/") + "/v1"
+    api_key = os.getenv("OPENAI_API_KEY") or "ollama"
 
     if stream:
         response = _build_response_obj(model_name, model_settings, tool_choice, parallel_tool_calls)
         stream_obj = await litellm.acompletion(
-            **ollama_kwargs, api_base=api_base, custom_llm_provider="openai"
+            **ollama_kwargs, api_base=api_base, custom_llm_provider="openai", api_key=api_key
         )
         return response, stream_obj
     else:
@@ -161,4 +195,5 @@ async def fetch_response_litellm_ollama(
             **ollama_kwargs,
             api_base=api_base,
             custom_llm_provider="openai",
+            api_key=api_key,
         )

@@ -12,7 +12,7 @@ model = os.getenv("CAI_MODEL", "alias1")
 
 # Create OpenAI client with fallback API key to prevent initialization errors
 # The actual API key should be set in environment variables or .env file
-api_key = os.getenv("OPENAI_API_KEY", "sk-placeholder-key-for-local-models")
+api_key = os.getenv("OPENAI_API_KEY") or "sk-placeholder-key-for-local-models"
 
 _flag_discriminator_prompt = load_prompt_template("prompts/system_flag_discriminator.md")
 

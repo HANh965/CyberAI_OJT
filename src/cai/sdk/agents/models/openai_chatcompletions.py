@@ -365,9 +365,13 @@ class OpenAIChatCompletionsModel(Model):
         self.model = model
         self._client = openai_client
         # Check if we're using OLLAMA models
-        self.is_ollama = os.getenv("OLLAMA") is not None and os.getenv("OLLAMA").lower() != "false"
-        # Detect alias models for direct httpx bypass (skip LiteLLM overhead)
         _m = str(model).lower()
+        self.is_ollama = (
+            (os.getenv("OLLAMA") is not None and os.getenv("OLLAMA").lower() != "false")
+            or _m.startswith("ollama")
+            or "qwen" in _m
+        )
+        # Detect alias models for direct httpx bypass (skip LiteLLM overhead)
         self._is_alias_model = (
             "alias" in _m and "alias1.5" not in _m
         ) or _m == "alias2-mini"
@@ -3177,7 +3181,12 @@ class OpenAIChatCompletionsModel(Model):
             print(f"[CACHE-DEBUG] _fetch_response called, stream={stream}, model={self.model}")
 
         # start by re-fetching self.is_ollama
-        self.is_ollama = os.getenv("OLLAMA") is not None and os.getenv("OLLAMA").lower() == "true"
+        _m = str(self.model).lower()
+        self.is_ollama = (
+            (os.getenv("OLLAMA") is not None and os.getenv("OLLAMA").lower() != "false")
+            or _m.startswith("ollama")
+            or "qwen" in _m
+        )
 
         # IMPORTANT: Include existing message history for context
         converted_messages = self._shallow_copy_history_messages()
@@ -3242,7 +3251,7 @@ class OpenAIChatCompletionsModel(Model):
         # IMPORTANT: Apply cache_control AFTER fix_message_list() to ensure it's preserved
         # Note: Use "claude" in string to support both direct and openrouter/anthropic/claude models
         model_str = str(self.model).lower()
-        if ("claude" in model_str or "gemini" in model_str) and len(
+        if "claude" in model_str and "gemini" not in model_str and len(
             converted_messages
         ) > 0:
             # Debug: Show messages BEFORE normalization
@@ -4547,7 +4556,16 @@ class OpenAIChatCompletionsModel(Model):
                     "For OpenAI models, set OPENAI_API_KEY. "
                     f"(CAI_MODEL={_c.model!r})"
                 )
-            self._client = AsyncOpenAI(api_key=api_key)
+            base_url = None
+            if str(self.model).lower().startswith("ollama"):
+                from cai.util import get_ollama_api_base
+                base_url = get_ollama_api_base()
+            elif explicit_custom_llm_api_base_configured(str(self.model)):
+                base_url = resolve_llm_openai_compatible_base(str(self.model))
+            if base_url:
+                self._client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+            else:
+                self._client = AsyncOpenAI(api_key=api_key)
         return self._client
 
     # Helper function to detect and format function calls from various models

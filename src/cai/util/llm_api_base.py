@@ -105,4 +105,6 @@ def resolve_llm_openai_compatible_api_key(model: str | None = None) -> str:
     effective = (model if model is not None else os.getenv("CAI_MODEL")) or ""
     if model_qualifies_for_alias_api_url(effective):
         return (os.getenv("ALIAS_API_KEY") or "").strip()
+    if effective.lower().startswith("ollama"):
+        return (os.getenv("OLLAMA_API_KEY") or os.getenv("OPENAI_API_KEY") or "ollama").strip()
     return (os.getenv("OPENAI_API_KEY") or "").strip()

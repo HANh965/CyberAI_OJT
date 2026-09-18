@@ -15,12 +15,14 @@ from cai.config import get_config
 _cfg = get_config()
 thought_agent_system_prompt = load_prompt_template("prompts/system_thought_router.md")
 
+api_key = _cfg.openai_api_key or "sk-placeholder-key-for-local-models"
+
 # Thought Process Agent for analysis and planning
 thought_agent = Agent(
     name="ThoughtAgent",
     model=OpenAIChatCompletionsModel(
         model=_cfg.model,
-        openai_client=AsyncOpenAI(),
+        openai_client=AsyncOpenAI(api_key=api_key),
     ),
     description="""Agent focused on analyzing and planning the next steps
                    in a security assessment or CTF challenge.""",

@@ -141,6 +141,9 @@ def get_ollama_api_base():
     # First check OLLAMA_API_BASE for local Ollama
     ollama_base = os.environ.get("OLLAMA_API_BASE")
     if ollama_base:
+        ollama_base = ollama_base.rstrip("/")
+        if ollama_base.endswith("/v1"):
+            ollama_base = ollama_base[:-3]
         return ollama_base
 
     # Then check OPENAI_BASE_URL for Ollama Cloud or other services
@@ -149,7 +152,7 @@ def get_ollama_api_base():
         return openai_base
 
     # Default to local Ollama
-    return "http://localhost:8000/v1"
+    return "http://localhost:11434"
 
 
 def get_ollama_auth_headers():

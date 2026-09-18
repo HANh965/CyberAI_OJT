@@ -49,17 +49,17 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "License :: OSI Approved :: MIT License",
 ]
 
 [project.urls]
-Homepage = "https://github.com/aliasrobotics/cai"
-Repository = "https://github.com/aliasrobotics/cai"
-Documentation = "https://aliasrobotics.github.io/cai/"
-Issues = "https://github.com/aliasrobotics/cai/issues"
-Research = "https://cybersecurityrobotics.com/research/cai-bug-bounty-cybersecurity-ai/"
+Homepage = "https://github.com/HANh965/CyberAI_OJT"
+Repository = "https://github.com/HANh965/CyberAI_OJT"
+Issues = "https://github.com/HANh965/CyberAI_OJT/issues"
 
 [project.optional-dependencies]
 voice = ["numpy>=2.2.0", "websockets>=15.0"]

@@ -20,8 +20,8 @@ theme:
   favicon: assets/imago.png
   icon:
     repo: fontawesome/brands/github
-repo_url: https://github.com/aliasrobotics/cai
-repo_name: aliasrobotics/cai
+repo_url: https://github.com/HANh965/CyberAI_OJT
+repo_name: HANh965/CyberAI_OJT
 nav:
   - Getting Started:
       - Welcome: index.md

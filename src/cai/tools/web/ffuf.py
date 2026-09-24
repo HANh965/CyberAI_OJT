@@ -15,7 +15,7 @@ def ffuf(args: str, target_url: str = "", ctf=None) -> str:
     Fast web fuzzer (ffuf) to discover hidden files, directories, vhosts, or fuzz HTTP parameters.
 
     Args:
-        args: Command-line arguments for ffuf (e.g., "-w wordlist.txt -u http://example.com/FUZZ -mc 200,301")
+        args: Command-line arguments for ffuf (e.g., "-w wordlist.txt -u http://localhost:8080/FUZZ -mc 200,301")
         target_url: Optional base target URL if not already in args
 
     Returns:

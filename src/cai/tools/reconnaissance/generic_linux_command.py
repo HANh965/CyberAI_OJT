@@ -305,8 +305,8 @@ def detect_unicode_homographs(text: str) -> tuple[bool, str]:
 async def generic_linux_command(
     command: str = "",
     interactive: bool = False,
-    session_id: str = None,
-    timeout: int = None,
+    session_id: str | None = None,
+    timeout: int | None = None,
     working_directory: str | None = None,
 ) -> str:
     """

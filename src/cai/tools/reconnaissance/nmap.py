@@ -18,7 +18,15 @@ def nmap(args: str, target: str, ctf=None) -> str:
     Returns:
         str: The output of running the nmap command
     """
-    command = f"nmap {args} {target}"
+    # Clean target if LLM passed URL or host:port
+    clean_target = target.strip()
+    if "://" in clean_target:
+        clean_target = clean_target.split("://", 1)[1]
+    clean_target = clean_target.split("/", 1)[0].split(":", 1)[0]
+    if not clean_target:
+        clean_target = target
+
+    command = f"nmap {args} {clean_target}"
     return run_command(command, ctf=ctf, stream=True)
 
 

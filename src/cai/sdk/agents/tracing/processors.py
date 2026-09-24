@@ -89,8 +89,7 @@ class BackendSpanExporter(TracingExporter):
         if not items:
             return
 
-        if not self.api_key:
-            logger.warning("OPENAI_API_KEY is not set, skipping trace export")
+        if not self.api_key or self.api_key == "ollama" or os.environ.get("CAI_TRACING", "false").lower() != "true":
             return
 
         data = [item.export() for item in items if item.export()]

@@ -1169,6 +1169,35 @@ class OpenAIChatCompletionsModel(Model):
             should_display_message = True
 
             _first_choice = _get_first_choice(response)
+            if _first_choice:
+                msg = _first_choice.message
+                if (
+                    (not hasattr(msg, "tool_calls") or not msg.tool_calls)
+                    and hasattr(msg, "content")
+                    and msg.content
+                ):
+                    detected_calls = self._detect_and_format_function_calls({"content": msg.content})
+                    if detected_calls:
+                        from openai.types.chat.chat_completion_message_tool_call import ChatCompletionMessageToolCall, Function
+                        import uuid
+                        synthetic_tcs = []
+                        for d in detected_calls:
+                            fn = d.get("function", {})
+                            fn_name = fn.get("name", "")
+                            fn_args = fn.get("arguments", "{}")
+                            if isinstance(fn_args, dict):
+                                fn_args = json.dumps(fn_args)
+                            synthetic_tcs.append(
+                                ChatCompletionMessageToolCall(
+                                    id=d.get("id") or f"call_{uuid.uuid4().hex[:16]}",
+                                    type="function",
+                                    function=Function(name=fn_name, arguments=fn_args),
+                                )
+                            )
+                        if synthetic_tcs:
+                            msg.tool_calls = synthetic_tcs
+                            msg.content = None
+
             if (
                 _first_choice
                 and hasattr(_first_choice.message, "tool_calls")
@@ -4601,33 +4630,57 @@ class OpenAIChatCompletionsModel(Model):
 
         if isinstance(delta, dict) and "content" in delta:
             content = delta["content"]
-            # Try to detect if the content is a JSON string with function call format
-            try:
-                if isinstance(content, str) and "{" in content and "}" in content:
-                    # Try to extract JSON from the content (it might be embedded in text)
-                    json_start = content.find("{")
-                    json_end = content.rfind("}") + 1
-                    if json_start >= 0 and json_end > json_start:
-                        json_str = content[json_start:json_end]
-                        parsed = _safe_json_loads(json_str, "delta content function call")
-                        if parsed and "name" in parsed and "arguments" in parsed:
-                            # This looks like a function call in JSON format
-                            return [
+            # Detect function calls in JSON format (single object, array, or multiple code blocks)
+            if isinstance(content, str) and ("{" in content or "[" in content):
+                try:
+                    decoder = json.JSONDecoder()
+                    found_objects = []
+
+                    # 1. Try to decode array if '[' exists
+                    arr_pos = content.find("[")
+                    if arr_pos != -1:
+                        try:
+                            arr, _ = decoder.raw_decode(content, arr_pos)
+                            if isinstance(arr, list):
+                                found_objects.extend(arr)
+                        except Exception:
+                            pass
+
+                    # 2. If no array found, search for all individual objects '{...}'
+                    if not found_objects:
+                        idx = 0
+                        while idx < len(content):
+                            pos = content.find("{", idx)
+                            if pos == -1:
+                                break
+                            try:
+                                obj, end_idx = decoder.raw_decode(content, pos)
+                                found_objects.append(obj)
+                                idx = max(end_idx, pos + 1)
+                            except Exception:
+                                idx = pos + 1
+
+                    result = []
+                    for i, item in enumerate(found_objects):
+                        if isinstance(item, dict) and "name" in item and "arguments" in item:
+                            args = item["arguments"]
+                            result.append(
                                 {
-                                    "index": 0,
-                                    "id": f"call_{time.time_ns()}",  # Generate a unique ID
+                                    "index": i,
+                                    "id": f"call_{time.time_ns()}_{i}",
                                     "type": "function",
                                     "function": {
-                                        "name": parsed["name"],
-                                        "arguments": json.dumps(parsed["arguments"])
-                                        if isinstance(parsed["arguments"], dict)
-                                        else parsed["arguments"],
+                                        "name": item["name"],
+                                        "arguments": json.dumps(args)
+                                        if isinstance(args, (dict, list))
+                                        else str(args),
                                     },
                                 }
-                            ]
-            except Exception:
-                # If JSON parsing fails, just continue with normal processing
-                pass
+                            )
+                    if result:
+                        return result
+                except Exception:
+                    pass
 
         # Anthropic-style tool_use format
         if hasattr(delta, "tool_use") and delta.tool_use:

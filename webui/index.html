@@ -202,6 +202,47 @@
   details.adv summary { cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 12px; }
   .hint { color: var(--muted); font-size: 11.5px; margin-top: 6px; }
   .disclaimer { color: var(--muted); font-size: 11px; margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+
+  /* run meta: đồng hồ + lượt + watchdog */
+  .run-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .run-meta #meta-clock { color: var(--text); }
+  .run-meta #meta-turns.over { color: var(--amber); }
+  .watchdog { color: var(--amber); background: var(--amber-bg); border: 1px solid #3a2c12; border-radius: 6px; padding: 1px 7px; }
+  .watchdog.stall { color: var(--red); background: var(--red-bg); border-color: #4a1d20; }
+
+  /* redaction */
+  .redact-toggle { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--muted); cursor: pointer; user-select: none; }
+  .redact-toggle input { width: 14px; height: 14px; accent-color: var(--accent); cursor: pointer; }
+  .redact-toggle.on { color: var(--accent); }
+  .redacted { color: var(--amber); background: var(--amber-bg); border-radius: 3px; padding: 0 3px; font-style: normal; }
+
+  /* log filter bar */
+  .log-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .log-filter input.search { flex: 1; min-width: 150px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 6px 10px; font-size: 12.5px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 11px; padding: 3px 9px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel-2); color: var(--muted); cursor: pointer; user-select: none; }
+  .chip.on { color: var(--text); border-color: var(--accent-dim); background: rgba(61,220,132,.08); }
+  .ln.hl .msg { background: rgba(217,164,65,.14); border-radius: 3px; }
+  .ln.flash { animation: flashln 1.3s ease; }
+  @keyframes flashln { 0% { background: rgba(78,161,255,.28); } 100% { background: transparent; } }
+
+  /* findings triage */
+  .find-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 8px; }
+  .find-hdr h3 { margin: 0; font-size: 14px; font-weight: 600; }
+  .find-susp { font-size: 10px; color: var(--amber); font-weight: 400; }
+  .find-empty { color: var(--muted); font-size: 12px; }
+  .find-card { border: 1px solid var(--border); border-radius: 8px; padding: 9px 11px; margin-bottom: 8px; background: var(--panel-2); }
+  .find-card.fp { opacity: .5; }
+  .find-top { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; flex-wrap: wrap; }
+  .sev-badge { font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 10px; }
+  .sev-badge.high { color: var(--red); background: var(--red-bg); }
+  .sev-badge.med { color: var(--amber); background: var(--amber-bg); }
+  .find-card.fp .sev-badge { text-decoration: line-through; }
+  .find-src { font-size: 10.5px; color: var(--muted); font-family: var(--mono); }
+  .find-ex { font-family: var(--mono); font-size: 11.5px; color: #cbd5e1; white-space: pre-wrap; word-break: break-word; max-height: 72px; overflow: auto; margin: 3px 0 6px; }
+  .find-act { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .find-act button, .find-act select { font-size: 10.5px; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; }
+  .find-act button:hover { background: var(--panel-2); }
 </style>
 </head>
 <body>
@@ -218,6 +259,11 @@
       <div class="status-label">Đang thực hiện</div>
       <div class="status-text" id="status-text">Chưa bắt đầu</div>
       <div class="progress"><i id="progress-bar"></i></div>
+      <div class="run-meta" id="run-meta">
+        <span id="meta-clock">⏱ 00:00</span>
+        <span id="meta-turns">· lượt 0/30</span>
+        <span id="meta-watchdog" class="watchdog" hidden></span>
+      </div>
     </div>
 
     <div class="panel">
@@ -236,13 +282,55 @@
         </div>
       </div>
     </div>
+
+    <div class="panel" style="border-left: 3px solid #3ddc84;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 8px;">
+        <span style="font-weight:600; font-size:13px; display:flex; align-items:center; gap:8px;">
+          <span id="runner-dot" style="width:8px; height:8px; border-radius:50%; background:#6b7787; display:inline-block;"></span>
+          Kali VM Sandbox
+        </span>
+        <span id="runner-badge" style="font-size:11px; padding:2px 8px; border-radius:10px; background:#131a24; color:#6b7787;">Offline</span>
+      </div>
+      <div id="runner-details" style="font-size:12px; color:var(--muted); font-family:var(--mono); line-height:1.4;">
+        Chưa kết nối máy ảo Kali. Lệnh agent sẽ chạy cục bộ.
+      </div>
+      <details style="margin-top:10px; font-size:12px; cursor:pointer;">
+        <summary style="color:var(--blue); outline:none;">Lệnh 1-dòng chạy trên Kali</summary>
+        <div style="margin-top:8px; background:var(--panel-2); padding:10px; border-radius:8px; border:1px solid var(--border);">
+          <div style="color:var(--muted); margin-bottom:6px;">Chạy trên terminal Kali Linux:</div>
+          <code id="runner-cmd" style="display:block; padding:8px; background:#0a0e14; border-radius:6px; color:#3ddc84; font-size:11px; word-break:break-all; user-select:all;">curl -s http://127.0.0.1:8000/cai_runner.py -o cai_runner.py && python3 cai_runner.py --server http://127.0.0.1:8000 --token cai-kali-secret</code>
+          <div style="font-size:11px; color:var(--muted); margin-top:6px;">(Đổi 127.0.0.1 thành IP card mạng Windows kết nối với máy ảo)</div>
+        </div>
+      </details>
+    </div>
+
+    <div class="panel" style="border-left: 3px solid #4ea1ff;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <span style="font-weight:600; font-size:13px;">🧠 Trí nhớ chiến dịch (SQLite)</span>
+        <button class="ghost" id="btn-clear-mem" style="padding:2px 7px; font-size:11px; border-radius:6px; cursor:pointer;" title="Xóa bộ nhớ chiến dịch">Xóa</button>
+      </div>
+      <div id="mem-stats" style="font-size:12px; color:var(--muted); font-family:var(--mono);">
+        0 host · 0 cổng · 0 cred/flag · 0 lỗ hổng
+      </div>
+      <details style="margin-top:8px; font-size:12px; cursor:pointer;" id="mem-details">
+        <summary style="color:var(--blue); outline:none;">Xem dữ kiện đã ghi nhớ</summary>
+        <div id="mem-list" style="margin-top:8px; max-height:180px; overflow-y:auto; background:var(--panel-2); padding:8px; border-radius:8px; border:1px solid var(--border); font-size:11.5px; font-family:var(--mono); line-height:1.45;">
+          Chưa có dữ kiện nào.
+        </div>
+      </details>
+    </div>
   </div>
 
   <!-- RIGHT: controls + log -->
   <div class="col-right">
     <div class="panel ctl">
-      <label>Mục tiêu (target — chỉ hiển thị)</label>
-      <input id="in-target" placeholder="vd: 10.10.14.0/24 hoặc scope bạn ĐƯỢC PHÉP kiểm thử" />
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+        <label style="margin:0;">Mục tiêu (Target / Scope RoE)</label>
+        <span style="font-size:11px; color:#3ddc84; display:flex; align-items:center; gap:4px;">
+          <span>🛡️ Scope Guard Bật</span>
+        </span>
+      </div>
+      <input id="in-target" placeholder="vd: 10.10.14.0/24 hoặc target.local (ngăn agent quét ra ngoài)" />
       <label>Chỉ thị cho agent (prompt)</label>
       <textarea id="in-prompt" placeholder="vd: Thực hiện đánh giá bảo mật trên phạm vi được ủy quyền ở trên. Trinh sát, quét cổng, liệt kê dịch vụ, và báo cáo."></textarea>
       <div class="row2">
@@ -258,8 +346,18 @@
           </div>
         </div>
       </div>
-      <label>Max turns</label>
-      <input id="in-turns" type="number" value="30" min="1" />
+      <div class="row2" style="align-items:end; margin-top:4px;">
+        <div>
+          <label>Max turns (Ngân sách lượt)</label>
+          <input id="in-turns" type="number" value="30" min="1" />
+        </div>
+        <div style="padding-bottom:8px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; color:#3ddc84; font-weight:600; margin:0;">
+            <input id="in-autonomy" type="checkbox" checked style="width:16px; height:16px; accent-color:#3ddc84;" />
+            🤖 Tự chủ HackerAI (Autonomy Loop)
+          </label>
+        </div>
+      </div>
 
       <div class="btns">
         <button class="primary" id="btn-start">▶ Bắt đầu</button>
@@ -285,17 +383,52 @@
     </div>
 
     <div class="panel">
+      <div class="find-hdr">
+        <h3>🔎 Phát hiện <span class="find-susp">· nghi ngờ — cần xác minh</span></h3>
+        <div style="display:flex; gap:6px;">
+          <button class="ghost" id="btn-export-find-md" style="padding:3px 8px; font-size:11px; border-radius:6px; cursor:pointer;" title="Xuất Findings dạng Markdown">Xuất .md</button>
+          <button class="ghost" id="btn-export-find-json" style="padding:3px 8px; font-size:11px; border-radius:6px; cursor:pointer;" title="Xuất Findings dạng JSON">.json</button>
+        </div>
+      </div>
+      <div id="find-list"><div class="find-empty">Chưa có phát hiện nào. Các kết quả nghi có lỗ hổng sẽ hiện ở đây để bạn phân loại (giả/thật, chỉnh mức, nhảy tới log).</div></div>
+    </div>
+
+    <div class="panel">
       <div class="log-hdr">
         <h3>Log agent</h3>
-        <div style="display:flex; gap:8px; align-items:center;">
+        <div style="display:flex; gap:10px; align-items:center;">
+          <label class="redact-toggle on" id="redact-label" title="Che API key, token, mật khẩu, hash, private key trước khi hiển thị/sao chép/xuất">
+            <input type="checkbox" id="chk-redact" checked /> 🔒 Che nhạy cảm
+          </label>
+          <button class="ghost" id="btn-download-report" style="padding:3px 8px; font-size:11.5px; border-radius:6px; cursor:pointer;" title="Tải báo cáo Pentest Markdown">📥 Báo cáo (.md)</button>
           <button class="ghost" id="btn-copy-log" style="padding:3px 8px; font-size:11.5px; border-radius:6px; cursor:pointer;" title="Sao chép toàn bộ log">📋 Sao chép log</button>
           <span class="log-count" id="log-count">0 sự kiện</span>
         </div>
+      </div>
+      <div class="log-filter">
+        <input class="search" id="log-search" placeholder="Tìm trong log… (lọc dòng + đếm khớp)" autocomplete="off" />
+        <div class="chips" id="log-chips">
+          <span class="chip on" data-kind="tool">Tool</span>
+          <span class="chip on" data-kind="sys">Kết quả</span>
+          <span class="chip on" data-kind="agent">Agent</span>
+          <span class="chip on" data-kind="handoff">Handoff</span>
+          <span class="chip on" data-kind="finding">Finding</span>
+          <span class="chip on" data-kind="err">Lỗi</span>
+        </div>
+        <span class="log-count" id="filter-count"></span>
+        <button class="ghost" id="btn-copy-visible" style="padding:3px 8px; font-size:11px; border-radius:6px; cursor:pointer;" title="Sao chép các dòng đang hiển thị">Chép phần hiện</button>
       </div>
       <div class="log-wrap">
         <div class="log" id="log"></div>
         <div class="scroll-btn" id="scroll-btn" title="Xuống cuối">↓</div>
       </div>
+
+      <details style="margin-top:12px; font-size:12px; cursor:pointer;" id="history-details">
+        <summary style="color:var(--blue); outline:none;">📜 Lịch sử các phiên pentest đã lưu trên đĩa</summary>
+        <div id="history-list" style="margin-top:8px; max-height:160px; overflow-y:auto; background:var(--panel-2); padding:8px; border-radius:8px; border:1px solid var(--border); font-size:11.5px;">
+          Đang nạp lịch sử...
+        </div>
+      </details>
     </div>
   </div>
 </div>
@@ -334,6 +467,42 @@ function detectPhase(text) {
 }
 
 /* ------------------------------------------------------------------ *
+ * Redaction — che credential/secret TRƯỚC khi render/copy/export.
+ * Áp tại nguồn (chuỗi thô) nên DOM, "sao chép log" và báo cáo đều sạch.
+ * Thận trọng: tránh che nhầm port/version của output pentest bình thường.
+ * ------------------------------------------------------------------ */
+const MASK = "‹che›";  // một token, không có dấu cách — tránh bị quy tắc sau khớp lại và để sót
+const REDACT_RULES = [
+  // Khối PRIVATE KEY (PEM)
+  { re: /-----BEGIN [^-\n]*PRIVATE KEY-----[\s\S]*?-----END [^-\n]*PRIVATE KEY-----/g, fn: () => `-----BEGIN PRIVATE KEY----- ${MASK} -----END PRIVATE KEY-----` },
+  // JWT
+  { re: /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, fn: () => MASK },
+  // Bearer / Basic token
+  { re: /\b(Bearer|Basic)\s+[A-Za-z0-9._\-/+=]{8,}/gi, fn: (m, s) => `${s} ${MASK}` },
+  // Header Authorization / X-CAI-API-Key: <value>
+  { re: /\b(authorization|x-cai-api-key)(\s*[:=]\s*)\S+/gi, fn: (m, k, sep) => `${k}${sep}${MASK}` },
+  // AWS access key id
+  { re: /\bAKIA[0-9A-Z]{16}\b/g, fn: () => MASK },
+  // NTLM/LM:NT hash (32hex:32hex)
+  { re: /\b[0-9a-f]{32}:[0-9a-f]{32}\b/gi, fn: () => MASK },
+  // Connection string có mật khẩu: scheme://user:pass@host
+  { re: /\b([a-z][a-z0-9+.\-]*:\/\/[^\s:/@]+:)[^\s@]+@/gi, fn: (m, head) => `${head}${MASK}@` },
+  // Gán api_key/secret/token/password = <value> (có dấu : hoặc =)
+  { re: /\b(api[_-]?key|secret|access[_-]?token|token|password|passwd|pwd)(\s*[:=]\s*)(["']?)([^\s"']{3,})\3/gi,
+    fn: (m, k, sep, q) => `${k}${sep}${q}${MASK}${q}` },
+  // mysql -p<pass> hoặc --password[= ]<pass> (không đụng nmap -p 80,443)
+  { re: /(--password|--pass)(=|\s+)(\S+)/gi, fn: (m, k, sep) => `${k}${sep}${MASK}` },
+  { re: /(^|\s)-p(?=\S)(?!\d[\d,\-]*(?:\s|$))\S+/g, fn: (m, pre) => `${pre}-p${MASK}` },
+];
+function redact(s) {
+  if (s == null) return s;
+  if (!state || !state.redact) return String(s);
+  let out = String(s);
+  for (const r of REDACT_RULES) out = out.replace(r.re, r.fn);
+  return out;
+}
+
+/* ------------------------------------------------------------------ *
  * State
  * ------------------------------------------------------------------ */
 const state = {
@@ -350,7 +519,21 @@ const state = {
   seenFindings: new Set(),
   logLines: 0,
   autoscroll: true,
+  redact: true,       // che credential — mặc định BẬT
+  startTime: 0,       // mốc bắt đầu phiên (ms) cho đồng hồ elapsed
+  lastFrameTs: 0,     // mốc frame SSE gần nhất cho watchdog
+  turns: 0,           // số lượt tool đã chạy
+  maxTurns: 30,       // ngân sách lượt của phiên hiện tại
+  clockTimer: null,   // setInterval đồng hồ 1s
+  watchTimer: null,   // setInterval watchdog
+  findings: [],       // model Findings có cấu trúc (triage)
+  curAgent: "",       // agent hiện tại (nguồn finding)
+  lastTool: "",       // tool gần nhất (nguồn finding)
+  filterKinds: null,  // Set các loại dòng đang bật (khởi tạo khi wire-up)
+  filterQ: "",        // chuỗi tìm kiếm hiện tại
 };
+const LOG_KINDS = ["tool", "sys", "agent", "handoff", "finding", "err"];
+const WATCHDOG_SEC = 90;  // không có frame SSE trong N giây → cảnh báo "có thể treo"
 
 /* ------------------------------------------------------------------ *
  * localStorage config (QW4) — nhớ cấu hình; KHÔNG bao giờ lưu API key
@@ -363,6 +546,7 @@ function saveCfg() {
       model: $("in-model").value,
       turns: $("in-turns").value, target: $("in-target").value,
       prompt: $("in-prompt").value,
+      redact: $("chk-redact").checked,
     }));
   } catch (_) { /* cửa sổ ẩn danh / bị chặn — bỏ qua */ }
 }
@@ -374,6 +558,11 @@ function loadCfg() {
   if (cfg.turns) $("in-turns").value = cfg.turns;
   if (cfg.target != null) $("in-target").value = cfg.target;
   if (cfg.prompt != null) $("in-prompt").value = cfg.prompt;
+  if (cfg.redact === false) {            // mặc định BẬT; chỉ tắt nếu người dùng từng tắt
+    state.redact = false;
+    $("chk-redact").checked = false;
+    $("redact-label").classList.remove("on");
+  }
   state.savedAgent = cfg.agent || null; // áp sau khi loadAgents() điền option
   state.savedModel = cfg.model || null; // áp sau khi loadModels() điền option
 }
@@ -410,11 +599,14 @@ function addLog(kind, html, sevLevel) {
   logEl.appendChild(ln);
   state.logLines++;
   $("log-count").textContent = state.logLines + " sự kiện";
+  applyFilterToLine(ln);   // tôn trọng bộ lọc đang bật cho dòng mới
+  updateFilterCount();
   if (state.autoscroll) {
     requestAnimationFrame(() => {
       logEl.scrollTop = logEl.scrollHeight;
     });
   }
+  return ln;
 }
 
 /* ------------------------------------------------------------------ *
@@ -441,15 +633,28 @@ function bumpPhase(text) {
   if (idx > state.maxPhase) { state.maxPhase = idx; renderPhases(); }
   return idx;
 }
-function countSeverity(text) {
-  const level = classifySeverity(text);
-  if (!level) return null;
-  const sig = level + ":" + text.trim().slice(0, 120).toLowerCase();
-  if (state.seenFindings.has(sig)) return level;
+function detectSeverity(text) { return classifySeverity(text); }
+function effSev(f) { return f.override || f.sev; }   // severity hiệu lực (ưu tiên override)
+function recountSeverity() {
+  let hi = 0, lo = 0;
+  for (const f of state.findings) { if (f.fp) continue; if (effSev(f) === "high") hi++; else lo++; }
+  state.sevHigh = hi; state.sevLow = lo;
+  $("sev-high").textContent = hi; $("sev-low").textContent = lo;
+}
+function registerFinding(level, rawText, lnEl) {
+  const sig = level + ":" + rawText.trim().slice(0, 120).toLowerCase();
+  if (state.seenFindings.has(sig)) return;         // dedup theo signature (như cũ)
   state.seenFindings.add(sig);
-  if (level === "high") { state.sevHigh++; $("sev-high").textContent = state.sevHigh; }
-  else { state.sevLow++; $("sev-low").textContent = state.sevLow; }
-  return level;
+  const f = {
+    id: "f" + (state.findings.length + 1),
+    sev: level, override: null, fp: false, sig,
+    excerpt: rawText.trim().slice(0, 500),
+    agent: state.curAgent || "?", tool: state.lastTool || "", ts: nowTs(),
+    el: lnEl || null,
+  };
+  state.findings.push(f);
+  renderFindingCard(f);
+  recountSeverity();
 }
 
 /* ------------------------------------------------------------------ *
@@ -460,6 +665,7 @@ function truncate(s, n) { s = String(s); return s.length > n ? s.slice(0, n) + "
 function handleStep(step) {
   const t = step.type;
   if (t === "agent_switched") {
+    state.curAgent = step.agent || state.curAgent;
     $("agent-name").textContent = step.agent || "Agent pentest";
     addLog("agent", `→ agent: <b>${escapeHtml(step.agent || "?")}</b>`);
     bumpPhase(step.agent || "");
@@ -477,39 +683,61 @@ function handleStep(step) {
     } else {
       argStr = String(step.arguments || "");
     }
+    state.lastTool = step.tool || state.lastTool;
     bumpPhase(step.tool || "");
-    addLog("tool", `<span class="arrow">${escapeHtml(step.tool||"tool")}</span> <span style="color:#94a3b8">${escapeHtml(argStr)}</span>`);
-    $("status-text").textContent = truncate(`${step.tool || "tool"} ${argStr}`, 90);
+    bumpTurn();  // mỗi lần gọi tool tính là 1 lượt
+    const argDisp = redact(argStr);
+    addLog("tool", `<span class="arrow">${escapeHtml(step.tool||"tool")}</span> <span style="color:#94a3b8">${escapeHtml(argDisp)}</span>`);
+    $("status-text").textContent = truncate(`${step.tool || "tool"} ${argDisp}`, 90);
   } else if (t === "tool_output") {
     const rawOut = step.output != null ? String(step.output) : "";
-    const level = countSeverity(rawOut);
+    const level = detectSeverity(rawOut);          // phát hiện trên bản gốc
+    const outDisp = redact(rawOut);                // hiển thị bản đã che
     const kind = level ? "finding" : "sys";
     const tag = level === "high" ? ` <span class="tag">[CAO]</span>` : level === "med" ? ` <span class="tag">[TB]</span>` : "";
-    
+    let ln;
     // Nếu output ngắn (<= 120 ký tự và không có ký tự xuống dòng)
-    if (rawOut.length <= 120 && !rawOut.includes("\n")) {
-      addLog(kind, escapeHtml(rawOut) + tag, level);
+    if (outDisp.length <= 120 && !outDisp.includes("\n")) {
+      ln = addLog(kind, escapeHtml(outDisp) + tag, level);
     } else {
       // Output đầy đủ của lệnh tool (sqlmap, nmap, ffuf, command shell...)
-      const lines = rawOut.split("\n").length;
+      const lines = outDisp.split("\n").length;
       const html = `
         <details class="tool-out-details" open>
-          <summary class="tool-out-summary"><span class="arrow">↳</span> Kết quả lệnh (${lines} dòng, ${rawOut.length} ký tự)${tag}</summary>
-          <pre class="pre-block">${escapeHtml(rawOut)}</pre>
+          <summary class="tool-out-summary"><span class="arrow">↳</span> Kết quả lệnh (${lines} dòng, ${outDisp.length} ký tự)${tag}</summary>
+          <pre class="pre-block">${escapeHtml(outDisp)}</pre>
         </details>`;
-      addLog(kind, html, level);
+      ln = addLog(kind, html, level);
     }
+    if (level) registerFinding(level, rawOut, ln);   // đưa vào bảng Findings (gốc, để export tự redact)
   } else if (t === "message") {
     const txt = (step.text || "").trim();
     if (!txt) return;
     bumpPhase(txt);
-    const level = countSeverity(txt);
+    const level = detectSeverity(txt);
     const tag = level === "high" ? ` <span class="tag">[CAO]</span>` : level === "med" ? ` <span class="tag">[TB]</span>` : "";
-    $("status-text").textContent = truncate(txt.replace(/\s+/g, " "), 90);
-    
-    // Giữ nguyên định dạng và các dòng của agent narrative
-    const html = `<div class="agent-msg">${escapeHtml(txt)}</div>` + tag;
-    addLog(level ? "finding" : "agent", html, level);
+    const txtDisp = redact(txt);
+    $("status-text").textContent = truncate(txtDisp.replace(/\s+/g, " "), 90);
+
+    // Giữ nguyên định dạng và các dòng của agent narrative (bản đã che)
+    const html = `<div class="agent-msg">${escapeHtml(txtDisp)}</div>` + tag;
+    const ln = addLog(level ? "finding" : "agent", html, level);
+    if (level) registerFinding(level, txt, ln);
+  } else if (t === "autonomy_checkpoint") {
+    const pIdx = PHASES.findIndex(p => p.key === step.phase);
+    if (pIdx >= 0 && pIdx > state.maxPhase) {
+      state.maxPhase = pIdx;
+      renderPhases();
+    }
+    const portsInfo = (step.ports && step.ports.length) ? ` · Cổng mở: <b>${escapeHtml(step.ports.join(", "))}</b>` : "";
+    const flagsInfo = (step.flags && step.flags.length) ? ` · 🚩 FLAG: <b style="color:#ff5c5c">${escapeHtml(step.flags.join(", "))}</b>` : "";
+    const cpHtml = `<div style="padding:6px 10px; background:rgba(61,220,132,0.08); border-left:3px solid #3ddc84; border-radius:4px; font-size:12px;">
+      <b>🔄 [Autonomy Loop · Vòng ${step.cycle || 1}/${step.max_cycles || 6} · Lượt ${step.turns_used || 0}/${step.max_turns || 30}]</b>
+      Pha: <span style="color:#3ddc84">${escapeHtml(step.phase_label || step.phase || "")}</span>${portsInfo}${flagsInfo}
+      <div style="color:var(--muted); margin-top:2px;">↳ ${escapeHtml(step.reason || "")}</div>
+    </div>`;
+    $("status-text").textContent = truncate(`[Vòng ${step.cycle}/${step.max_cycles}] ${step.reason || step.phase_label || ""}`, 90);
+    addLog("sys", cpHtml);
   } else if (step && step.raw != null) {
     addLog("sys", "· khung SSE không đọc được");   // QW5: không render "undefined"
   } else if (t) {
@@ -523,10 +751,10 @@ function handleFinal(data) {
   const finalOut = data && data.final_output;
   let reportBody = "";
   if (finalMsg) {
-    reportBody = `<pre class="final-content">${escapeHtml(finalMsg)}</pre>`;
+    reportBody = `<pre class="final-content">${escapeHtml(redact(finalMsg))}</pre>`;
   } else if (finalOut) {
     const str = typeof finalOut === "string" ? finalOut : JSON.stringify(finalOut, null, 2);
-    reportBody = `<pre class="final-content">${escapeHtml(str)}</pre>`;
+    reportBody = `<pre class="final-content">${escapeHtml(redact(str))}</pre>`;
   }
 
   if (reportBody) {
@@ -565,6 +793,7 @@ async function readSSE(resp) {
       if (!dataLines.length) continue;
       let data;
       try { data = JSON.parse(dataLines.join("\n")); } catch (_) { data = { raw: dataLines.join("\n") }; }
+      noteFrame();  // có hoạt động → reset watchdog
       if (ev === "reasoning_step") handleStep(data);
       else if (ev === "final") {
         handleFinal(data);
@@ -692,6 +921,181 @@ function setupModelCombo() {
   });
 }
 
+/* ------------------------------------------------------------------ *
+ * Log filter: tìm kiếm + chip theo loại + đếm khớp + chép phần hiện
+ * ------------------------------------------------------------------ */
+function lnKind(ln) {
+  for (const k of LOG_KINDS) if (ln.classList.contains(k)) return k;
+  return "sys";
+}
+function applyFilterToLine(ln) {
+  const kindOk = !state.filterKinds || state.filterKinds.has(lnKind(ln));
+  const q = state.filterQ;
+  const textOk = !q || ln.textContent.toLowerCase().includes(q);
+  const show = kindOk && textOk;
+  ln.style.display = show ? "" : "none";
+  ln.classList.toggle("hl", show && !!q);
+}
+function applyLogFilter() {
+  state.filterQ = ($("log-search").value || "").trim().toLowerCase();
+  for (const ln of logEl.children) applyFilterToLine(ln);
+  updateFilterCount();
+}
+function updateFilterCount() {
+  let total = 0, shown = 0;
+  for (const ln of logEl.children) { total++; if (ln.style.display !== "none") shown++; }
+  const el = $("filter-count");
+  if (!el) return;
+  const filtering = state.filterQ || (state.filterKinds && state.filterKinds.size < LOG_KINDS.length);
+  el.textContent = filtering ? `${shown}/${total} dòng khớp` : "";
+}
+function copyVisibleLog() {
+  const parts = [];
+  for (const ln of logEl.children) if (ln.style.display !== "none") parts.push(ln.innerText);
+  navigator.clipboard.writeText(parts.join("\n")).then(() => {
+    const b = $("btn-copy-visible"), o = b.textContent;
+    b.textContent = "✓ Đã chép"; setTimeout(() => { b.textContent = o; }, 1600);
+  }).catch((e) => alert("Không chép được: " + e.message));
+}
+
+/* ------------------------------------------------------------------ *
+ * Findings triage: card, false-positive, ghi đè severity, nhảy tới log, export
+ * ------------------------------------------------------------------ */
+function sevLabel(s) { return s === "high" ? "CAO" : s === "med" ? "TB" : "INFO"; }
+function buildFindingCard(f) {
+  const card = document.createElement("div");
+  card.className = "find-card" + (f.fp ? " fp" : "");
+  card.id = "card-" + f.id;
+  const src = [f.agent, f.tool, f.ts].filter(Boolean).join(" · ");
+  const es = effSev(f);
+  card.innerHTML =
+    `<div class="find-top">
+       <span class="sev-badge ${es}">${sevLabel(es)}</span>
+       <span class="find-src">${escapeHtml(src)}</span>
+     </div>
+     <div class="find-ex">${escapeHtml(redact(f.excerpt))}</div>
+     <div class="find-act">
+       <select data-act="sev" title="Ghi đè mức độ">
+         <option value="">mức gốc: ${sevLabel(f.sev)}</option>
+         <option value="high"${f.override === "high" ? " selected" : ""}>CAO</option>
+         <option value="med"${f.override === "med" ? " selected" : ""}>TB</option>
+       </select>
+       <button data-act="jump" title="Nhảy tới dòng log gốc">↪ tới log</button>
+       <button data-act="fp" title="Đánh dấu giả / không phải lỗi">${f.fp ? "↺ Bỏ giả" : "✗ Giả"}</button>
+     </div>`;
+  return card;
+}
+function renderFindingCard(f) {
+  const list = $("find-list");
+  const empty = list.querySelector(".find-empty");
+  if (empty) empty.remove();
+  const existing = $("card-" + f.id);
+  const card = buildFindingCard(f);
+  if (existing) list.replaceChild(card, existing);
+  else list.appendChild(card);
+}
+function findingById(cardId) { return state.findings.find((x) => ("card-" + x.id) === cardId); }
+function jumpToLog(f) {
+  if (!f.el || !f.el.isConnected) { alert("Dòng log gốc đã bị xóa."); return; }
+  if (f.el.style.display === "none") f.el.style.display = "";  // hiện tạm nếu đang bị lọc
+  f.el.scrollIntoView({ block: "center", behavior: "smooth" });
+  f.el.classList.remove("flash"); void f.el.offsetWidth; f.el.classList.add("flash");
+}
+function resetFindings() {
+  state.findings = [];
+  const list = $("find-list");
+  if (list) list.innerHTML = '<div class="find-empty">Chưa có phát hiện nào. Các kết quả nghi có lỗ hổng sẽ hiện ở đây để bạn phân loại (giả/thật, chỉnh mức, nhảy tới log).</div>';
+}
+function downloadBlob(text, name, mime) {
+  const blob = new Blob([text], { type: mime + ";charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function findingsForExport() { return state.findings.filter((f) => !f.fp); }
+function exportFindingsMd() {
+  const fs = findingsForExport();
+  if (!fs.length) { alert("Chưa có phát hiện nào để xuất (không tính các mục đã đánh dấu giả)."); return; }
+  const target = ($("in-target").value || "").trim() || "—";
+  let md = `# Findings — CAI Pentest Dashboard\n\n`;
+  md += `- Target / scope: ${target}\n- Phiên: ${state.sessionId || "—"}\n- Xuất lúc: ${new Date().toISOString()}\n`;
+  md += `- ⚠️ Findings là **nghi ngờ — cần xác minh thủ công**; mức độ do heuristic đề xuất.\n\n`;
+  fs.forEach((f, i) => {
+    md += `## ${i + 1}. [${sevLabel(effSev(f))}] ${f.tool || f.agent || "finding"}\n\n`;
+    md += `- Nguồn: ${f.agent} · ${f.tool || "(không rõ tool)"} · ${f.ts}\n`;
+    if (f.override) md += `- Mức gốc: ${sevLabel(f.sev)} → ghi đè: ${sevLabel(f.override)}\n`;
+    md += `\n\`\`\`\n${redact(f.excerpt)}\n\`\`\`\n\n`;
+  });
+  downloadBlob(md, `findings_${(state.sessionId || "session").slice(0, 8)}.md`, "text/markdown");
+}
+function exportFindingsJson() {
+  const fs = findingsForExport().map((f) => ({
+    id: f.id, severity: effSev(f), original_severity: f.sev, overridden: !!f.override,
+    agent: f.agent, tool: f.tool, time: f.ts, excerpt: redact(f.excerpt),
+    note: "suspected — needs verification",
+  }));
+  if (!fs.length) { alert("Chưa có phát hiện nào để xuất (không tính các mục đã đánh dấu giả)."); return; }
+  const payload = {
+    target: ($("in-target").value || "").trim() || null,
+    session: state.sessionId || null, exported_at: new Date().toISOString(),
+    findings: fs,
+  };
+  downloadBlob(JSON.stringify(payload, null, 2), `findings_${(state.sessionId || "session").slice(0, 8)}.json`, "application/json");
+}
+
+/* ------------------------------------------------------------------ *
+ * Đồng hồ elapsed + bộ đếm lượt + watchdog treo (không tự kill)
+ * ------------------------------------------------------------------ */
+function fmtElapsed(ms) {
+  const s = Math.floor(ms / 1000), m = Math.floor(s / 60), r = s % 60;
+  const p = (n) => String(n).padStart(2, "0");
+  return m >= 60 ? `${Math.floor(m/60)}:${p(m%60)}:${p(r)}` : `${p(m)}:${p(r)}`;
+}
+function updateClock() {
+  if (!state.startTime) return;
+  $("meta-clock").textContent = "⏱ " + fmtElapsed(Date.now() - state.startTime);
+}
+function renderTurns() {
+  const el = $("meta-turns");
+  el.textContent = `· lượt ${state.turns}/${state.maxTurns}`;
+  el.classList.toggle("over", state.turns >= state.maxTurns);
+}
+function bumpTurn() { state.turns++; renderTurns(); }
+function noteFrame() {
+  state.lastFrameTs = Date.now();
+  const w = $("meta-watchdog");
+  if (!w.hidden) { w.hidden = true; w.classList.remove("stall"); }
+}
+function checkWatchdog() {
+  if (!state.running || !state.lastFrameTs) return;
+  const idle = Math.floor((Date.now() - state.lastFrameTs) / 1000);
+  const w = $("meta-watchdog");
+  if (idle >= WATCHDOG_SEC) {
+    w.hidden = false;
+    w.classList.toggle("stall", idle >= WATCHDOG_SEC * 2);
+    w.textContent = `⚠ im lặng ${idle}s — có thể đang chạy tool dài hoặc đã treo`;
+  }
+}
+function startRunTimers() {
+  state.startTime = Date.now();
+  state.lastFrameTs = Date.now();
+  state.turns = 0;
+  state.maxTurns = parseInt($("in-turns").value, 10) || 30;
+  updateClock(); renderTurns();
+  $("meta-watchdog").hidden = true;
+  clearInterval(state.clockTimer); clearInterval(state.watchTimer);
+  state.clockTimer = setInterval(updateClock, 1000);
+  state.watchTimer = setInterval(checkWatchdog, 3000);
+}
+function stopRunTimers() {
+  clearInterval(state.clockTimer); clearInterval(state.watchTimer);
+  state.clockTimer = state.watchTimer = null;
+  updateClock();
+  $("meta-watchdog").hidden = true;
+}
+
 async function start() {
   if (state.running) return;
   const prompt = $("in-prompt").value.trim();
@@ -702,6 +1106,9 @@ async function start() {
   state.running = true; state.ended = false; state.errored = false;
   state.maxPhase = -1; state.sevHigh = 0; state.sevLow = 0;
   state.seenFindings.clear();
+  resetFindings();
+  state.curAgent = ""; state.lastTool = "";
+  startRunTimers();
   $("sev-high").textContent = "0"; $("sev-low").textContent = "0";
   $("target-label").textContent = target || "—";
   $("live-dot").className = "dot live";
@@ -724,10 +1131,15 @@ async function start() {
     $("agent-name").textContent = session.agent || "Agent pentest";
 
     const turns = parseInt($("in-turns").value, 10) || 30;
+    const autonomyOn = $("in-autonomy") ? $("in-autonomy").checked : true;
     const composed = target ? `${prompt}\n\n[Target / scope: ${target}]` : prompt;
     const stream = await api(`/api/v1/sessions/${encodeURIComponent(session.id)}/messages/stream`, {
       method: "POST", headers: headers({ "Accept": "text/event-stream" }),
-      body: JSON.stringify({ input: composed, max_turns: turns }),
+      body: JSON.stringify({
+        input: composed,
+        max_turns: turns,
+        context: { target: target || null, autonomy: autonomyOn },
+      }),
       signal: state.abort.signal,
     });
     await readSSE(stream);
@@ -749,6 +1161,7 @@ function markEnded() {
   if (state.ended) return;             // chỉ lật một lần
   state.ended = true;
   state.running = false;
+  stopRunTimers();
   $("live-dot").className = state.errored ? "dot err" : "dot";  // QW2
   $("btn-start").disabled = false; $("btn-stop").disabled = true;
   renderPhases();
@@ -766,6 +1179,7 @@ async function stop() {
 
 function clearLog() {
   logEl.innerHTML = ""; state.logLines = 0; $("log-count").textContent = "0 dòng";
+  updateFilterCount();
 }
 
 /* ------------------------------------------------------------------ *
@@ -774,6 +1188,46 @@ function clearLog() {
 $("btn-start").addEventListener("click", start);
 $("btn-stop").addEventListener("click", stop);
 $("btn-clear").addEventListener("click", clearLog);
+$("chk-redact").addEventListener("change", (e) => {
+  state.redact = e.target.checked;
+  $("redact-label").classList.toggle("on", state.redact);
+  saveCfg();
+  if (!state.redact) {
+    addLog("sys", "⚠ Đã TẮT che nhạy cảm — log/sao chép/xuất sẽ hiện credential ở các dòng mới.");
+  } else {
+    addLog("sys", "🔒 Đã BẬT che nhạy cảm (áp cho các dòng mới).");
+  }
+});
+
+/* Log filter — search + chips + chép phần hiện */
+state.filterKinds = new Set(LOG_KINDS);
+$("log-search").addEventListener("input", applyLogFilter);
+$("log-chips").addEventListener("click", (e) => {
+  const chip = e.target.closest(".chip");
+  if (!chip) return;
+  const k = chip.dataset.kind;
+  if (state.filterKinds.has(k)) state.filterKinds.delete(k); else state.filterKinds.add(k);
+  chip.classList.toggle("on", state.filterKinds.has(k));
+  applyLogFilter();
+});
+$("btn-copy-visible").addEventListener("click", copyVisibleLog);
+
+/* Findings — card actions (ủy quyền sự kiện) + export */
+$("find-list").addEventListener("click", (e) => {
+  const card = e.target.closest(".find-card"); if (!card) return;
+  const f = findingById(card.id); if (!f) return;
+  const act = e.target.getAttribute("data-act");
+  if (act === "fp") { f.fp = !f.fp; renderFindingCard(f); recountSeverity(); }
+  else if (act === "jump") jumpToLog(f);
+});
+$("find-list").addEventListener("change", (e) => {
+  if (e.target.getAttribute("data-act") !== "sev") return;
+  const card = e.target.closest(".find-card"); if (!card) return;
+  const f = findingById(card.id); if (!f) return;
+  f.override = e.target.value || null; renderFindingCard(f); recountSeverity();
+});
+$("btn-export-find-md").addEventListener("click", exportFindingsMd);
+$("btn-export-find-json").addEventListener("click", exportFindingsJson);
 $("btn-copy-log").addEventListener("click", async () => {
   try {
     const text = logEl.innerText;
@@ -783,6 +1237,32 @@ $("btn-copy-log").addEventListener("click", async () => {
     setTimeout(() => { $("btn-copy-log").textContent = orig; }, 1800);
   } catch (err) {
     alert("Không thể chép vào clipboard: " + err.message);
+  }
+});
+$("btn-download-report").addEventListener("click", async () => {
+  const sid = state.sessionId;
+  if (!sid) {
+    alert("Chưa có phiên làm việc nào đang chạy hoặc vừa hoàn thành.");
+    return;
+  }
+  try {
+    const res = await api(`/api/v1/audit/sessions/${encodeURIComponent(sid)}/report`, { headers: headers() });
+    if (!res.ok) {
+      alert("Chưa tạo được báo cáo cho phiên này (mã HTTP " + res.status + ").");
+      return;
+    }
+    const md = redact(await res.text());  // che credential trước khi xuất file
+    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pentest_report_${sid.slice(0, 8)}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert("Lỗi khi tải báo cáo: " + err.message);
   }
 });
 $("scroll-btn").addEventListener("click", () => { state.autoscroll = true; logEl.scrollTop = logEl.scrollHeight; });
@@ -814,6 +1294,142 @@ renderPhases();
 setupModelCombo(); // combobox model (gõ tìm + panel cuộn)
 loadAgents();
 loadModels();
+
+/* ------------------------------------------------------------------ *
+ * Kali Linux Reverse Runner status checker
+ * ------------------------------------------------------------------ */
+async function checkRunnerStatus() {
+  try {
+    const res = await api("/api/v1/runner/status", { headers: headers() });
+    if (!res.ok) return;
+    const data = await res.json();
+    const dot = $("runner-dot");
+    const badge = $("runner-badge");
+    const details = $("runner-details");
+    const cmd = $("runner-cmd");
+
+    let host = window.location.hostname || "127.0.0.1";
+    if ((host === "127.0.0.1" || host === "localhost") && data.preferred_ip) {
+      host = data.preferred_ip;
+    }
+    const port = window.location.port ? `:${window.location.port}` : ":8000";
+    const token = data.token || "cai-kali-secret";
+    if (cmd) {
+      cmd.textContent = `curl -s http://${host}${port}/cai_runner.py -o cai_runner.py && python3 cai_runner.py --server http://${host}${port} --token ${token}`;
+    }
+
+    if (data.active && data.runners && data.runners.length > 0) {
+      const r = data.runners[0];
+      if (dot) dot.style.background = "#3ddc84";
+      if (badge) {
+        badge.style.background = "#1f6f47";
+        badge.style.color = "#3ddc84";
+        badge.textContent = "Online (" + (r.transport || "http").toUpperCase() + ")";
+      }
+      if (details) {
+        details.innerHTML = `<b>${r.hostname}</b> (${r.ip}) &bull; ${r.tools ? r.tools.length : 0} công cụ sẵn sàng &bull; ${r.os || "Kali"}`;
+      }
+    } else {
+      if (dot) dot.style.background = "#6b7787";
+      if (badge) {
+        badge.style.background = "#131a24";
+        badge.style.color = "#6b7787";
+        badge.textContent = "Offline";
+      }
+      if (details) {
+        details.textContent = "Chưa kết nối máy ảo Kali. Lệnh agent sẽ chạy cục bộ.";
+      }
+    }
+  } catch (_) {}
+}
+setInterval(checkRunnerStatus, 4000);
+checkRunnerStatus();
+
+/* ------------------------------------------------------------------ *
+ * Audit History Loader
+ * ------------------------------------------------------------------ */
+async function loadAuditHistory() {
+  const container = $("history-list");
+  if (!container) return;
+  try {
+    const res = await api("/api/v1/audit/sessions", { headers: headers() });
+    if (!res.ok) return;
+    const list = await res.json();
+    if (!list || list.length === 0) {
+      container.innerHTML = '<div style="color:var(--muted)">Chưa có phiên pentest nào được ghi nhận.</div>';
+      return;
+    }
+    container.innerHTML = list.slice(0, 15).map(s => {
+      const dt = (s.created_at || "").replace("T", " ").slice(0, 19);
+      const sid = s.session_id.slice(0, 8);
+      return `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.06);">
+        <div>
+          <b>${dt}</b> <span style="color:var(--muted)">(${sid})</span> &bull; <span style="color:#3ddc84">${s.target || "—"}</span>
+          <div style="color:var(--muted); font-size:10.5px;">Agent: ${s.agent} &bull; ${s.tool_executions} lệnh &bull; ${s.status}</div>
+        </div>
+        <a href="/api/v1/audit/sessions/${encodeURIComponent(s.session_id)}/report" target="_blank" style="color:var(--blue); text-decoration:none; padding:3px 8px; background:#131a24; border:1px solid var(--border); border-radius:4px; font-size:11px;">Xem Báo cáo ↗</a>
+      </div>`;
+    }).join("");
+  } catch (_) {}
+}
+
+const histDetails = $("history-details");
+if (histDetails) {
+  histDetails.addEventListener("toggle", () => {
+    if (histDetails.open) loadAuditHistory();
+  });
+}
+loadAuditHistory();
+
+/* ------------------------------------------------------------------ *
+ * SQLite Campaign Memory Loader (Phase 3)
+ * ------------------------------------------------------------------ */
+async function loadCampaignMemory() {
+  const statsEl = $("mem-stats");
+  const listEl = $("mem-list");
+  if (!statsEl || !listEl) return;
+  try {
+    const target = ($("in-target") && $("in-target").value.trim()) || "";
+    const q = target ? `?target=${encodeURIComponent(target)}` : "";
+    const res = await api(`/api/v1/memory/summary${q}`, { headers: headers() });
+    if (!res.ok) return;
+    const data = await res.json();
+    const st = data.stats || {};
+    statsEl.innerHTML = `<b>${st.hosts || 0}</b> host · <b>${st.ports || 0}</b> cổng · <b>${st.credentials || 0}</b> cred/flag · <b>${st.findings || 0}</b> lỗ hổng`;
+
+    const sections = [];
+    if (data.ports && data.ports.length) {
+      sections.push(`<div style="color:#3ddc84; font-weight:600;">[Cổng & Dịch vụ mở]</div>` +
+        data.ports.slice(0, 12).map(p => `• ${escapeHtml(p.host)}:${p.port}/${escapeHtml(p.proto)} (${escapeHtml(p.service)} ${escapeHtml(p.version || "")})`).join("<br/>"));
+    }
+    if (data.endpoints && data.endpoints.length) {
+      sections.push(`<div style="color:#4ea1ff; font-weight:600; margin-top:6px;">[Endpoint Web]</div>` +
+        data.endpoints.slice(0, 8).map(e => `• ${escapeHtml(e.url)} [${e.status_code}]`).join("<br/>"));
+    }
+    if (data.credentials && data.credentials.length) {
+      sections.push(`<div style="color:#d9a441; font-weight:600; margin-top:6px;">[Credentials & Flags]</div>` +
+        data.credentials.slice(0, 8).map(c => `• [${escapeHtml(c.secret_type)}] ${escapeHtml(c.username ? c.username + ":" : "")}<b>${escapeHtml(c.secret)}</b>`).join("<br/>"));
+    }
+    if (data.findings && data.findings.length) {
+      sections.push(`<div style="color:#ff5c5c; font-weight:600; margin-top:6px;">[Lỗ hổng & Phát hiện]</div>` +
+        data.findings.slice(0, 8).map(f => `• [${escapeHtml(f.severity)}] ${escapeHtml(f.title)}`).join("<br/>"));
+    }
+    listEl.innerHTML = sections.length ? sections.join("<div style='height:4px'></div>") : `<span style="color:var(--muted)">Chưa có dữ kiện nào trong SQLite.</span>`;
+  } catch (_) {}
+}
+
+const clearMemBtn = $("btn-clear-mem");
+if (clearMemBtn) {
+  clearMemBtn.addEventListener("click", async () => {
+    if (!confirm("Xóa toàn bộ Trí nhớ chiến dịch (SQLite)?")) return;
+    try {
+      await api("/api/v1/memory", { method: "DELETE", headers: headers() });
+      loadCampaignMemory();
+    } catch (_) {}
+  });
+}
+setInterval(loadCampaignMemory, 5000);
+loadCampaignMemory();
 </script>
 </body>
 </html>

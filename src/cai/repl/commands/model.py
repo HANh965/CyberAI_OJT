@@ -365,6 +365,28 @@ def get_predefined_model_categories() -> Dict[str, List[Dict[str, str]]]:
                     "Ollama Cloud - DeepSeek V3 671B model (no GPU required)"
                 )
             }
+        ],
+        "Groq": [
+            {
+                "name": "groq/qwen/qwen3.8-27b",
+                "description": (
+                    "Qwen 3.8 27B on Groq - Blazing fast, no moral refusal in CTF/labs"
+                )
+            },
+            {
+                "name": "groq/openai/gpt-oss-120b",
+                "description": (
+                    "GPT OSS 120B on Groq"
+                )
+            }
+        ],
+        "Cerebras": [
+            {
+                "name": "cerebras/qwen-3.8-27b",
+                "description": (
+                    "Qwen 3.8 27B on Cerebras - Ultra high speed on WSE chip"
+                )
+            }
         ]
     }
 
@@ -384,7 +406,9 @@ def get_all_predefined_models() -> List[Dict[str, Any]]:
         "Anthropic Claude": "Anthropic",
         "OpenAI": "OpenAI",
         "DeepSeek": "DeepSeek",
-        "Ollama Cloud": "Ollama Cloud"
+        "Ollama Cloud": "Ollama Cloud",
+        "Groq": "Groq",
+        "Cerebras": "Cerebras"
     }
 
     for category, models in model_categories.items():

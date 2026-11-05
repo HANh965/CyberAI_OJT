@@ -81,6 +81,14 @@ class FunctionTool:
     """Whether the JSON schema is in strict mode. We **strongly** recommend setting this to True,
     as it increases the likelihood of correct JSON input."""
 
+    func: Callable[..., Any] | None = None
+    """The original underlying callable function."""
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        if self.func is not None:
+            return self.func(*args, **kwargs)
+        raise TypeError(f"'{self.name}' tool is not directly callable")
+
 
 @dataclass
 class FileSearchTool:
@@ -323,6 +331,7 @@ def function_tool(
             params_json_schema=schema.params_json_schema,
             on_invoke_tool=_on_invoke_tool,
             strict_json_schema=strict_mode,
+            func=the_func,
         )
 
     # If func is actually a callable, we were used as @function_tool with no parentheses

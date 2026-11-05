@@ -243,6 +243,37 @@
   .find-act { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .find-act button, .find-act select { font-size: 10.5px; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; }
   .find-act button:hover { background: var(--panel-2); }
+
+  /* Stage 7: WebUI Pro - Visual Attack Mindmap & Live Terminal */
+  .pro-tabs { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 12px; gap: 8px; flex-wrap: wrap; }
+  .pro-tab-group { display: flex; gap: 6px; }
+  .pro-tab { background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); padding: 6px 12px; border-radius: 8px; font-size: 12.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all .15s; }
+  .pro-tab.active { background: rgba(61,220,132,.12); color: var(--accent); border-color: var(--accent-dim); }
+  .pro-tab:hover:not(.active) { color: var(--text); border-color: #2d3b4e; }
+  .mindmap-wrap { position: relative; background: radial-gradient(circle at center, #0d131c 0%, #070a0f 100%); border: 1px solid var(--border); border-radius: 10px; height: 320px; overflow: hidden; user-select: none; }
+  .mindmap-svg { width: 100%; height: 100%; cursor: grab; }
+  .mindmap-svg:active { cursor: grabbing; }
+  .mm-controls { position: absolute; top: 8px; right: 8px; display: flex; gap: 4px; z-index: 5; }
+  .mm-btn { background: rgba(15,20,28,.85); border: 1px solid var(--border); color: var(--text); font-size: 11px; padding: 3px 8px; border-radius: 6px; cursor: pointer; }
+  .mm-btn:hover { border-color: var(--blue); color: var(--blue); }
+  .mm-legend { position: absolute; bottom: 8px; left: 10px; display: flex; gap: 10px; font-size: 11px; color: var(--muted); background: rgba(10,14,20,.8); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); pointer-events: none; }
+  .mm-legend span { display: inline-flex; align-items: center; gap: 4px; }
+  .mm-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .mm-info { margin-top: 8px; padding: 8px 10px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; font-family: var(--mono); font-size: 11.5px; color: var(--muted); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .xterm-wrap { background: #06080c; border: 1px solid #1e293b; border-radius: 10px; overflow: hidden; font-family: var(--mono); }
+  .xterm-bar { background: #0f1622; padding: 6px 10px; border-bottom: 1px solid #1e293b; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .xterm-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+  .xterm-chip { font-size: 10.5px; padding: 2px 7px; border-radius: 5px; background: #162030; border: 1px solid #26354d; color: #94a3b8; cursor: pointer; font-family: var(--mono); }
+  .xterm-chip:hover { color: var(--accent); border-color: var(--accent-dim); }
+  .xterm-screen { height: 260px; overflow-y: auto; padding: 10px 12px; font-size: 12px; line-height: 1.5; color: #d1fae5; white-space: pre-wrap; word-break: break-word; }
+  .xterm-line-cmd { color: #3ddc84; font-weight: 600; margin-top: 6px; }
+  .xterm-line-agent { color: #4ea1ff; font-weight: 600; margin-top: 6px; }
+  .xterm-line-out { color: #cbd5e1; }
+  .xterm-line-err { color: #ff5c5c; }
+  .xterm-input-row { display: flex; align-items: center; background: #090d14; border-top: 1px solid #1e293b; padding: 6px 10px; gap: 8px; }
+  .xterm-prompt { color: #3ddc84; font-weight: 700; font-size: 12px; white-space: nowrap; }
+  .xterm-input { flex: 1; background: transparent; border: none; color: #f8fafc; font-family: var(--mono); font-size: 12.5px; outline: none; padding: 4px 0; }
+
 </style>
 </head>
 <body>
@@ -319,6 +350,20 @@
         </div>
       </details>
     </div>
+
+    <div class="panel" style="border-left: 3px solid #10b981;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <span style="font-weight:600; font-size:13px;">🎯 Mock Pentest Lab (Cổng 8888)</span>
+        <button class="ghost" id="btn-toggle-lab" style="padding:2px 8px; font-size:11px; border-radius:6px; cursor:pointer;">Khởi động</button>
+      </div>
+      <div id="lab-stats" style="font-size:12px; color:var(--muted); font-family:var(--mono);">
+        Trạng thái: Đang kiểm tra...
+      </div>
+      <div style="margin-top:8px; display:flex; gap:8px;">
+        <a id="lab-link" href="http://127.0.0.1:8888" target="_blank" style="display:none; font-size:11.5px; color:#3ddc84; text-decoration:none; padding:3px 8px; background:#131a24; border:1px solid var(--border); border-radius:4px;">Mở Lab ↗</a>
+        <button class="ghost" id="btn-fill-target" style="padding:2px 7px; font-size:11px; border-radius:6px; cursor:pointer;" title="Điền mục tiêu Lab vào form">Nạp vào Target Form</button>
+      </div>
+    </div>
   </div>
 
   <!-- RIGHT: controls + log -->
@@ -379,6 +424,80 @@
       <div class="disclaimer">
         ⚠️ Chỉ dùng trên hệ thống bạn <b>sở hữu hoặc được ủy quyền bằng văn bản</b> để kiểm thử.
         Bảng điều khiển này chỉ hiển thị log do backend CAI tạo ra — nó không tự chạy tấn công nào.
+      </div>
+    </div>
+
+
+    <!-- Stage 7: WebUI Pro — Visual Attack Mindmap & Live Interactive Terminal -->
+    <div class="panel" id="pro-workspace-panel">
+      <div class="pro-tabs">
+        <div class="pro-tab-group">
+          <button type="button" class="pro-tab active" id="tab-btn-mindmap">🕸️ Sơ đồ Cây Tấn Công (Mindmap)</button>
+          <button type="button" class="pro-tab" id="tab-btn-terminal">💻 Terminal Kali Trực Tiếp (xterm)</button>
+        </div>
+        <div style="font-size:11.5px; color:var(--muted); font-family:var(--mono);" id="pro-status-badge">
+          Real-time Sync: Bật
+        </div>
+      </div>
+
+      <!-- TAB 1: Visual Attack Graph / Mindmap -->
+      <div id="view-mindmap">
+        <div class="mindmap-wrap" id="mindmap-wrap">
+          <div class="mm-controls">
+            <button type="button" class="mm-btn" id="btn-mm-zoom-in" title="Phóng to">+</button>
+            <button type="button" class="mm-btn" id="btn-mm-zoom-out" title="Thu nhỏ">−</button>
+            <button type="button" class="mm-btn" id="btn-mm-reset" title="Căn giữa">Căn giữa</button>
+            <button type="button" class="mm-btn" id="btn-mm-refresh" title="Làm mới sơ đồ">↻ Làm mới</button>
+          </div>
+          <svg class="mindmap-svg" id="mindmap-svg" viewBox="0 0 820 320" preserveAspectRatio="xMidYMid meet">
+            <defs>
+              <pattern id="mm-grid" width="24" height="24" patternUnits="userSpaceOnUse">
+                <circle cx="1" cy="1" r="1" fill="#1e293b" />
+              </pattern>
+            </defs>
+            <rect width="2000" height="2000" x="-500" y="-500" fill="url(#mm-grid)" />
+            <g id="mm-viewport">
+              <g id="mm-edges"></g>
+              <g id="mm-nodes"></g>
+            </g>
+          </svg>
+          <div class="mm-legend">
+            <span><i class="mm-dot" style="background:#3ddc84"></i>Attacker</span>
+            <span><i class="mm-dot" style="background:#4ea1ff"></i>Host</span>
+            <span><i class="mm-dot" style="background:#a855f7"></i>Port / Web</span>
+            <span><i class="mm-dot" style="background:#ff5c5c"></i>Lỗ hổng</span>
+            <span><i class="mm-dot" style="background:#fbbf24"></i>Flag / Cred</span>
+          </div>
+        </div>
+        <div class="mm-info" id="mm-node-inspector">
+          <span id="mm-inspector-text">💡 Nhấp vào một nút trên sơ đồ để xem chi tiết hoặc gửi lệnh kiểm thử nhanh sang Terminal.</span>
+          <button type="button" class="ghost" id="btn-mm-to-term" style="display:none; padding:2px 8px; font-size:11px; border-radius:6px; cursor:pointer; color:var(--accent); border-color:var(--accent-dim);">⚡ Chạy lệnh trong Terminal</button>
+        </div>
+      </div>
+
+      <!-- TAB 2: Live Interactive Kali Terminal -->
+      <div id="view-terminal" hidden>
+        <div class="xterm-wrap">
+          <div class="xterm-bar">
+            <div class="xterm-chips">
+              <span style="font-size:11px; color:var(--muted); margin-right:4px;">Lệnh nhanh:</span>
+              <button type="button" class="xterm-chip" data-cmd="id && uname -a">id &amp; uname</button>
+              <button type="button" class="xterm-chip" data-cmd="ip -br a">ip a</button>
+              <button type="button" class="xterm-chip" data-cmd="ss -tulnp">ss -tulnp</button>
+              <button type="button" class="xterm-chip" data-cmd="nmap -F 127.0.0.1">nmap nhanh</button>
+              <button type="button" class="xterm-chip" data-cmd="curl -I http://127.0.0.1:8888">check MockLab</button>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <button type="button" class="xterm-chip" id="btn-term-clear" style="color:#ff9a9a;">Xóa màn hình</button>
+            </div>
+          </div>
+          <div class="xterm-screen" id="term-screen"><div class="xterm-line-out" style="color:#6b7787;">[CAI Pro Terminal] Đồng bộ thời gian thực với Kali Reverse Runner &amp; Agent. Gõ lệnh bên dưới để can thiệp trực tiếp...</div></div>
+          <div class="xterm-input-row">
+            <span class="xterm-prompt" id="term-prompt-label">kali@cai-pro:~#</span>
+            <input type="text" class="xterm-input" id="term-input" placeholder="Nhập lệnh shell (Enter để chạy, ↑/↓ lịch sử lệnh)..." autocomplete="off" spellcheck="false" />
+            <button type="button" class="primary" id="btn-term-send" style="flex:0 0 auto; padding:5px 12px; font-size:12px;">Chạy</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1430,6 +1549,431 @@ if (clearMemBtn) {
 }
 setInterval(loadCampaignMemory, 5000);
 loadCampaignMemory();
+
+/* ------------------------------------------------------------------ *
+ * Built-in Mock Vulnerable Lab Controller (Stage 5)
+ * ------------------------------------------------------------------ */
+let labRunning = false;
+
+async function checkMockLabStatus() {
+  const statsEl = $("lab-stats");
+  const toggleBtn = $("btn-toggle-lab");
+  const linkEl = $("lab-link");
+  if (!statsEl || !toggleBtn) return;
+
+  try {
+    const res = await api("/api/v1/lab/status", { headers: headers() });
+    if (!res.ok) return;
+    const data = await res.json();
+    labRunning = !!data.running;
+
+    if (labRunning) {
+      statsEl.innerHTML = `<span style="color:#3ddc84;">● Đang chạy</span> (http://127.0.0.1:${data.port}) &bull; Đã giải: <b style="color:#3ddc84">${data.challenges_solved || 0}/${data.challenges_total || 7}</b> cờ`;
+      toggleBtn.textContent = "Dừng";
+      toggleBtn.style.color = "var(--red)";
+      if (linkEl) {
+        linkEl.style.display = "inline-block";
+        linkEl.href = data.url || `http://127.0.0.1:${data.port}`;
+      }
+    } else {
+      statsEl.innerHTML = `<span style="color:var(--muted);">○ Chưa chạy</span> (Cổng ${data.port || 8888})`;
+      toggleBtn.textContent = "Khởi động";
+      toggleBtn.style.color = "var(--text)";
+      if (linkEl) linkEl.style.display = "none";
+    }
+  } catch (_) {}
+}
+
+const toggleLabBtn = $("btn-toggle-lab");
+if (toggleLabBtn) {
+  toggleLabBtn.addEventListener("click", async () => {
+    toggleLabBtn.disabled = true;
+    try {
+      if (labRunning) {
+        await api("/api/v1/lab/stop", { method: "POST", headers: headers() });
+      } else {
+        await api("/api/v1/lab/start", { method: "POST", headers: headers() });
+      }
+      await checkMockLabStatus();
+    } catch (_) {}
+    finally {
+      toggleLabBtn.disabled = false;
+    }
+  });
+}
+
+const fillTargetBtn = $("btn-fill-target");
+if (fillTargetBtn) {
+  fillTargetBtn.addEventListener("click", () => {
+    const targetInput = $("in-target");
+    const promptInput = $("in-prompt");
+    if (targetInput) targetInput.value = "http://127.0.0.1:8888";
+    if (promptInput) {
+      promptInput.value = "Khảo sát và đánh giá bảo mật toàn diện mục tiêu http://127.0.0.1:8888. " +
+        "Tìm kiếm các lỗ hổng OWASP Top 10 (SQL Injection, CSRF, IDOR, Command Injection, Path Traversal, XSS), " +
+        "khai thác để chiếm các lá cờ (CTF Flags) và lập báo cáo tổng kết hoàn chỉnh.";
+    }
+    if (typeof flash === 'function') {
+      flash(targetInput);
+      flash(promptInput);
+    }
+  });
+}
+
+setInterval(checkMockLabStatus, 4000);
+checkMockLabStatus();
+
+
+/* ------------------------------------------------------------------ *
+ * Stage 7: WebUI Pro — Visual Attack Mindmap & Live Interactive Terminal
+ * ------------------------------------------------------------------ */
+(function initWebUIPro() {
+  const tabMindmap = $("tab-btn-mindmap");
+  const tabTerminal = $("tab-btn-terminal");
+  const viewMindmap = $("view-mindmap");
+  const viewTerminal = $("view-terminal");
+  const statusBadge = $("pro-status-badge");
+
+  function switchProTab(tab) {
+    if (tab === "terminal") {
+      tabMindmap.classList.remove("active");
+      tabTerminal.classList.add("active");
+      viewMindmap.hidden = true;
+      viewTerminal.hidden = false;
+      const inp = $("term-input");
+      if (inp) inp.focus();
+    } else {
+      tabTerminal.classList.remove("active");
+      tabMindmap.classList.add("active");
+      viewTerminal.hidden = true;
+      viewMindmap.hidden = false;
+      loadAttackGraph();
+    }
+  }
+
+  if (tabMindmap) tabMindmap.addEventListener("click", () => switchProTab("mindmap"));
+  if (tabTerminal) tabTerminal.addEventListener("click", () => switchProTab("terminal"));
+
+  /* --- Visual Attack Mindmap SVG Renderer --- */
+  let mmScale = 1;
+  let mmPanX = 0;
+  let mmPanY = 0;
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let selectedQuickCmd = "";
+
+  const svgEl = $("mindmap-svg");
+  const viewportEl = $("mm-viewport");
+  const edgesGroup = $("mm-edges");
+  const nodesGroup = $("mm-nodes");
+  const inspectorText = $("mm-inspector-text");
+  const btnMmToTerm = $("btn-mm-to-term");
+
+  function applyTransform() {
+    if (viewportEl) {
+      viewportEl.setAttribute("transform", `translate(${mmPanX}, ${mmPanY}) scale(${mmScale})`);
+    }
+  }
+
+  if (svgEl) {
+    svgEl.addEventListener("mousedown", (e) => {
+      if (e.target.closest(".mm-node-g")) return;
+      isDragging = true;
+      dragStartX = e.clientX - mmPanX;
+      dragStartY = e.clientY - mmPanY;
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (!isDragging) return;
+      mmPanX = e.clientX - dragStartX;
+      mmPanY = e.clientY - dragStartY;
+      applyTransform();
+    });
+    window.addEventListener("mouseup", () => { isDragging = false; });
+    svgEl.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 0.12 : -0.12;
+      mmScale = Math.min(2.4, Math.max(0.4, mmScale + delta));
+      applyTransform();
+    }, { passive: false });
+  }
+
+  const btnZoomIn = $("btn-mm-zoom-in");
+  const btnZoomOut = $("btn-mm-zoom-out");
+  const btnReset = $("btn-mm-reset");
+  const btnRefresh = $("btn-mm-refresh");
+  if (btnZoomIn) btnZoomIn.addEventListener("click", () => { mmScale = Math.min(2.4, mmScale + 0.2); applyTransform(); });
+  if (btnZoomOut) btnZoomOut.addEventListener("click", () => { mmScale = Math.max(0.4, mmScale - 0.2); applyTransform(); });
+  if (btnReset) btnReset.addEventListener("click", () => { mmScale = 1; mmPanX = 0; mmPanY = 0; applyTransform(); });
+  if (btnRefresh) btnRefresh.addEventListener("click", loadAttackGraph);
+
+  if (btnMmToTerm) {
+    btnMmToTerm.addEventListener("click", () => {
+      if (!selectedQuickCmd) return;
+      switchProTab("terminal");
+      const inp = $("term-input");
+      if (inp) {
+        inp.value = selectedQuickCmd;
+        inp.focus();
+      }
+    });
+  }
+
+  const NODE_COLORS = {
+    attacker:   { fill: "#0f291e", stroke: "#3ddc84", text: "#3ddc84" },
+    host:       { fill: "#102338", stroke: "#4ea1ff", text: "#93c5fd" },
+    port:       { fill: "#211538", stroke: "#a855f7", text: "#d8b4fe" },
+    endpoint:   { fill: "#1e1b38", stroke: "#818cf8", text: "#c7d2fe" },
+    finding:    { fill: "#311115", stroke: "#ff5c5c", text: "#fca5a5" },
+    flag:       { fill: "#332409", stroke: "#fbbf24", text: "#fde68a" },
+    credential: { fill: "#2d230c", stroke: "#f59e0b", text: "#fcd34d" }
+  };
+
+  function renderAttackGraph(data) {
+    if (!edgesGroup || !nodesGroup) return;
+    const nodes = (data && data.nodes) ? data.nodes : [];
+    const edges = (data && data.edges) ? data.edges : [];
+
+    edgesGroup.innerHTML = "";
+    nodesGroup.innerHTML = "";
+
+    // Group nodes by layer (0..3)
+    const layers = { 0: [], 1: [], 2: [], 3: [] };
+    nodes.forEach((n) => {
+      const l = (n.layer in layers) ? n.layer : 2;
+      layers[l].push(n);
+    });
+
+    const layerX = { 0: 75, 1: 265, 2: 500, 3: 725 };
+    const H = 320;
+    const posMap = {};
+
+    Object.keys(layers).forEach((lk) => {
+      const list = layers[lk];
+      const count = list.length;
+      list.forEach((n, idx) => {
+        const x = layerX[lk] || 400;
+        const step = H / (count + 1);
+        const y = Math.round(step * (idx + 1));
+        posMap[n.id] = { x, y, node: n };
+      });
+    });
+
+    // Draw Bezier edges
+    edges.forEach((e) => {
+      const src = posMap[e.source];
+      const dst = posMap[e.target];
+      if (!src || !dst) return;
+      const dx = (dst.x - src.x) * 0.5;
+      const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", `M ${src.x} ${src.y} C ${src.x + dx} ${src.y}, ${dst.x - dx} ${dst.y}, ${dst.x} ${dst.y}`);
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", dst.node.type === "finding" ? "#7f1d1d" : dst.node.type === "flag" ? "#78350f" : "#1e293b");
+      path.setAttribute("stroke-width", "1.8");
+      edgesGroup.appendChild(path);
+    });
+
+    // Draw interactive nodes
+    Object.values(posMap).forEach(({ x, y, node }) => {
+      const palette = NODE_COLORS[node.type] || NODE_COLORS.host;
+      const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      g.setAttribute("class", "mm-node-g");
+      g.setAttribute("transform", `translate(${x}, ${y})`);
+      g.style.cursor = "pointer";
+
+      const lbl = String(node.label || node.id);
+      const boxW = Math.min(185, Math.max(90, lbl.length * 6.5 + 20));
+      const boxH = 26;
+
+      const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rect.setAttribute("x", String(-boxW / 2));
+      rect.setAttribute("y", String(-boxH / 2));
+      rect.setAttribute("width", String(boxW));
+      rect.setAttribute("height", String(boxH));
+      rect.setAttribute("rx", "6");
+      rect.setAttribute("fill", palette.fill);
+      rect.setAttribute("stroke", palette.stroke);
+      rect.setAttribute("stroke-width", "1.5");
+
+      const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      text.setAttribute("text-anchor", "middle");
+      text.setAttribute("dy", "4");
+      text.setAttribute("fill", palette.text);
+      text.setAttribute("font-size", "11");
+      text.setAttribute("font-family", "ui-monospace, Consolas, monospace");
+      text.textContent = lbl.length > 26 ? lbl.slice(0, 24) + "…" : lbl;
+
+      g.appendChild(rect);
+      g.appendChild(text);
+
+      g.addEventListener("click", () => {
+        const meta = node.meta || {};
+        if (node.type === "host") {
+          selectedQuickCmd = `nmap -sV -T4 ${meta.host || node.label}`;
+          inspectorText.textContent = `🖥️ Host: ${meta.host || node.label} | OS: ${meta.os_guess || "Chưa rõ"}`;
+          btnMmToTerm.style.display = "inline-block";
+        } else if (node.type === "port") {
+          selectedQuickCmd = `nmap -sC -sV -p ${meta.port} ${meta.host}`;
+          inspectorText.textContent = `🔌 Cổng mở: ${meta.host}:${meta.port}/${meta.proto} (${meta.service || ""} ${meta.version || ""})`;
+          btnMmToTerm.style.display = "inline-block";
+        } else if (node.type === "endpoint") {
+          selectedQuickCmd = `curl -i -s "${meta.url}" | head -n 30`;
+          inspectorText.textContent = `🌐 Endpoint: ${meta.url} [HTTP ${meta.status_code || 200}]`;
+          btnMmToTerm.style.display = "inline-block";
+        } else if (node.type === "finding") {
+          selectedQuickCmd = "";
+          inspectorText.textContent = `🚨 Lỗ hổng [${meta.severity}]: ${meta.title} — ${meta.evidence || ""}`;
+          btnMmToTerm.style.display = "none";
+        } else if (node.type === "flag" || node.type === "credential") {
+          selectedQuickCmd = "";
+          inspectorText.textContent = `🚩 Thu thập [${meta.secret_type}]: ${meta.secret}`;
+          btnMmToTerm.style.display = "none";
+        } else {
+          selectedQuickCmd = "id && ip -br a";
+          inspectorText.textContent = `🐧 ${node.label} — Trung tâm điều phối tác chiến`;
+          btnMmToTerm.style.display = "inline-block";
+        }
+      });
+
+      nodesGroup.appendChild(g);
+    });
+  }
+
+  async function loadAttackGraph() {
+    try {
+      const targetVal = ($("in-target") && $("in-target").value) ? $("in-target").value.trim() : "";
+      const q = targetVal ? `?target=${encodeURIComponent(targetVal)}` : "";
+      const res = await api(`/api/v1/memory/graph${q}`, { headers: headers() });
+      if (!res.ok) return;
+      const data = await res.json();
+      renderAttackGraph(data);
+    } catch (_) {}
+  }
+
+  setInterval(loadAttackGraph, 4500);
+  loadAttackGraph();
+
+  /* --- Live Interactive Terminal (xterm style) --- */
+  let lastTermSeq = 0;
+  const termScreen = $("term-screen");
+  const termInput = $("term-input");
+  const termSendBtn = $("btn-term-send");
+  const termClearBtn = $("btn-term-clear");
+  const termPromptLabel = $("term-prompt-label");
+  const cmdHistory = [];
+  let historyIdx = -1;
+
+  function appendTermLine(text, cls) {
+    if (!termScreen) return;
+    const div = document.createElement("div");
+    div.className = cls || "xterm-line-out";
+    div.textContent = text;
+    termScreen.appendChild(div);
+    termScreen.scrollTop = termScreen.scrollHeight;
+  }
+
+  async function pollTerminalEvents() {
+    try {
+      const res = await api(`/api/v1/runner/terminal/logs?since_seq=${lastTermSeq}`, { headers: headers() });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (termPromptLabel) {
+        termPromptLabel.textContent = data.runner_active ? "kali@kali-vm:~#" : "local@cai-host:~$";
+      }
+      if (statusBadge) {
+        statusBadge.textContent = data.runner_active ? "🟢 Kali Shell: Connected" : "🟡 Local Shell Fallback";
+      }
+      const evs = data.events || [];
+      evs.forEach((ev) => {
+        if (ev.seq > lastTermSeq) lastTermSeq = ev.seq;
+        if (ev.kind === "command") {
+          const tag = ev.source === "manual" ? "[MANUAL]" : "[AGENT]";
+          const cls = ev.source === "manual" ? "xterm-line-cmd" : "xterm-line-agent";
+          appendTermLine(`${tag} $ ${ev.text}`, cls);
+        } else if (ev.kind === "output") {
+          appendTermLine(ev.text, "xterm-line-out");
+        }
+      });
+    } catch (_) {}
+  }
+
+  async function runManualTerminalCommand(rawCmd) {
+    const cmd = (rawCmd || "").trim();
+    if (!cmd) return;
+    cmdHistory.push(cmd);
+    historyIdx = cmdHistory.length;
+    if (termInput) termInput.value = "";
+    if (termSendBtn) termSendBtn.disabled = true;
+
+    try {
+      const targetVal = ($("in-target") && $("in-target").value) ? $("in-target").value.trim() : "";
+      const res = await api("/api/v1/runner/terminal/exec", {
+        method: "POST",
+        headers: { ...headers(), "Content-Type": "application/json" },
+        body: JSON.stringify({ command: cmd, timeout: 60, target: targetVal })
+      });
+      await pollTerminalEvents();
+      if (!res.ok) {
+        appendTermLine(`[ERROR] HTTP ${res.status}`, "xterm-line-err");
+      }
+      loadAttackGraph();
+      if (typeof loadCampaignMemory === "function") loadCampaignMemory();
+    } catch (err) {
+      appendTermLine(`[ERROR] ${err.message || err}`, "xterm-line-err");
+    } finally {
+      if (termSendBtn) termSendBtn.disabled = false;
+      if (termInput) termInput.focus();
+    }
+  }
+
+  if (termSendBtn) {
+    termSendBtn.addEventListener("click", () => runManualTerminalCommand(termInput ? termInput.value : ""));
+  }
+  if (termInput) {
+    termInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        runManualTerminalCommand(termInput.value);
+      } else if (e.key === "ArrowUp") {
+        if (cmdHistory.length && historyIdx > 0) {
+          e.preventDefault();
+          historyIdx--;
+          termInput.value = cmdHistory[historyIdx];
+        }
+      } else if (e.key === "ArrowDown") {
+        if (historyIdx < cmdHistory.length - 1) {
+          e.preventDefault();
+          historyIdx++;
+          termInput.value = cmdHistory[historyIdx];
+        } else {
+          historyIdx = cmdHistory.length;
+          termInput.value = "";
+        }
+      }
+    });
+  }
+
+  if (termClearBtn) {
+    termClearBtn.addEventListener("click", async () => {
+      if (termScreen) termScreen.innerHTML = "";
+      try {
+        await api("/api/v1/runner/terminal/logs", { method: "DELETE", headers: headers() });
+        lastTermSeq = 0;
+      } catch (_) {}
+    });
+  }
+
+  document.querySelectorAll(".xterm-chip[data-cmd]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const c = btn.getAttribute("data-cmd");
+      if (c) runManualTerminalCommand(c);
+    });
+  });
+
+  setInterval(pollTerminalEvents, 1500);
+  pollTerminalEvents();
+})();
+
 </script>
 </body>
 </html>

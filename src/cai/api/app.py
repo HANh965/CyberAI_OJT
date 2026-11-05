@@ -8,7 +8,7 @@ import os
 import secrets
 from typing import List
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Security, status
+from fastapi import Depends, FastAPI, HTTPException, Request, Security, status, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import logging
@@ -701,33 +701,43 @@ def create_cai_api_app(
         # Compose input with history if stateful; reuse SessionState internals
         composed = session._compose_input(payload.input)  # noqa: SLF001 (intentional reuse)
 
-        # API requirement: underlying OpenAI chat completions must NOT stream.
-        # Implement streaming via RunHooks (non-streaming model calls) instead of Runner.run_streamed.
-        async def _gen():
-            async for chunk in sse_stream_via_hooks(
-                session.agent,
-                composed,
-                context=payload.context,
-                max_turns=payload.max_turns,
-                session=session,
-            ):
-                yield chunk
-            # After finishing, persist history/state so subsequent calls see full context.
-            # We can't rely on agent.model.message_history (not all models expose it),
-            # so we run a non-streaming pass to reconstruct the conversation input list.
-            try:
-                from cai.sdk.agents.run import Runner, DEFAULT_MAX_TURNS as _DEF_TURNS
+        # Audit Logger & Scope Guard initialization for this session
+        from cai.audit import audit_logger, set_active_session_id
+        from cai.security import scope_guard
+        set_active_session_id(session_id)
 
-                recon_result = await Runner.run(
+        target_val = ""
+        if payload.context and isinstance(payload.context, dict):
+            target_val = payload.context.get("target") or payload.context.get("scope") or ""
+        if not target_val and session.metadata and isinstance(session.metadata, dict):
+            target_val = session.metadata.get("target") or session.metadata.get("scope") or ""
+        if target_val:
+            scope_guard.set_scope(target_val)
+
+        prompt_str = payload.input if isinstance(payload.input, str) else str(payload.input)
+        audit_logger.log_session_start(
+            session_id=session_id,
+            agent_name=session.agent_name,
+            model_name=session.model_name,
+            target_scope=target_val or ", ".join(scope_guard.get_scope()),
+            metadata=payload.context or session.metadata,
+        )
+        audit_logger.log_user_prompt(session_id, prompt_str)
+
+        # API requirement: underlying OpenAI chat completions must NOT stream.
+        # Implement streaming via RunHooks + Autonomy Loop instead of Runner.run_streamed.
+        async def _gen():
+            try:
+                async for chunk in sse_stream_via_hooks(
                     session.agent,
                     composed,
                     context=payload.context,
-                    max_turns=int(payload.max_turns) if isinstance(payload.max_turns, (int, float)) else _DEF_TURNS,
-                )
-                session.history = recon_result.to_input_list()
-            except Exception:
-                # Best-effort only; if it fails we keep the previous history.
-                pass
+                    max_turns=payload.max_turns,
+                    session=session,
+                ):
+                    yield chunk
+            finally:
+                audit_logger.log_session_end(session_id, status="completed")
 
         headers = {
             "Cache-Control": "no-cache",
@@ -1065,6 +1075,329 @@ def create_cai_api_app(
         return UXTitleLiteResponse(title=title)
 
     # ------------------------------------------------------------------
+    # Reverse Runner API & WebSocket for isolated Kali Linux VM
+    # ------------------------------------------------------------------
+    from cai.runner.manager import runner_manager
+
+    @app.get("/cai_runner.py", include_in_schema=False)
+    @app.get("/api/v1/runner/script", tags=["runner"])
+    def get_runner_script():
+        """Serve the standalone Kali Linux reverse runner script for 1-click curl download."""
+        from pathlib import Path
+        from fastapi.responses import FileResponse
+
+        script_path = Path(__file__).resolve().parents[3] / "cai_runner.py"
+        if not script_path.is_file():
+            script_path = Path("cai_runner.py").resolve()
+        if not script_path.is_file():
+            raise HTTPException(status_code=404, detail="cai_runner.py not found on controller")
+        return FileResponse(
+            path=str(script_path),
+            media_type="text/x-python",
+            filename="cai_runner.py",
+        )
+
+    @app.get("/api/v1/runner/status", tags=["runner"])
+    def get_runner_status():
+        """Get the live status of connected Kali reverse runners."""
+        return runner_manager.get_status()
+
+    @app.post("/api/v1/runner/register", tags=["runner"])
+    async def register_runner(request: Request):
+        """Register a Kali VM reverse runner."""
+        token = request.headers.get("X-Runner-Token", "")
+        if not runner_manager.verify_token(token):
+            raise HTTPException(status_code=401, detail="Invalid runner token")
+
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+
+        runner_id = body.get("runner_id")
+        if not runner_id:
+            raise HTTPException(status_code=400, detail="Missing runner_id")
+
+        client_ip = request.client.host if request.client else body.get("client_ip", "unknown")
+        runner_manager.register_runner(
+            runner_id=runner_id,
+            hostname=body.get("hostname", "kali"),
+            os_info=body.get("os_info", "Kali Linux"),
+            tools=body.get("tools", []),
+            client_ip=client_ip,
+            transport="http",
+        )
+        return {"status": "registered", "runner_id": runner_id}
+
+    @app.api_route("/api/v1/runner/poll", methods=["GET", "POST"], tags=["runner"])
+    async def poll_runner_task(request: Request, runner_id: str = ""):
+        """Long-polling endpoint for Kali runner to receive queued commands."""
+        token = request.headers.get("X-Runner-Token", "")
+        if not runner_manager.verify_token(token):
+            raise HTTPException(status_code=401, detail="Invalid runner token")
+
+        if not runner_id and request.method == "POST":
+            try:
+                body = await request.json()
+                runner_id = body.get("runner_id", "")
+            except Exception:
+                pass
+
+        if not runner_id:
+            raise HTTPException(status_code=400, detail="Missing runner_id parameter")
+
+        loop = asyncio.get_running_loop()
+        task_data = await loop.run_in_executor(
+            None,
+            runner_manager.get_next_task_for_runner,
+            runner_id,
+            25.0,
+        )
+        if task_data:
+            return task_data
+        return {}
+
+    @app.post("/api/v1/runner/result", tags=["runner"])
+    async def post_runner_result(request: Request):
+        """Receive command execution output chunk or completion status from Kali."""
+        token = request.headers.get("X-Runner-Token", "")
+        if not runner_manager.verify_token(token):
+            raise HTTPException(status_code=401, detail="Invalid runner token")
+
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+        task_id = body.get("task_id")
+        if not task_id:
+            raise HTTPException(status_code=400, detail="Missing task_id")
+
+        success = runner_manager.post_task_update(
+            task_id=task_id,
+            chunk=body.get("chunk"),
+            completed=body.get("completed", False),
+            return_code=body.get("return_code"),
+            error=body.get("error"),
+        )
+        return {"status": "ok" if success else "task_not_found"}
+
+    @app.websocket("/api/v1/runner/ws")
+    async def runner_ws(websocket: WebSocket, token: str = ""):
+        """High-performance bi-directional WebSocket connection for Kali runner."""
+        header_token = websocket.headers.get("X-Runner-Token", "")
+        auth_token = token or header_token
+        if not runner_manager.verify_token(auth_token):
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+        await websocket.accept()
+        runner_id = None
+        try:
+            while True:
+                data = await websocket.receive_text()
+                msg = _json.loads(data)
+                mtype = msg.get("type")
+
+                if mtype == "register":
+                    runner_id = msg.get("runner_id")
+                    client_ip = websocket.client.host if websocket.client else "unknown"
+                    runner_manager.register_runner(
+                        runner_id=runner_id,
+                        hostname=msg.get("hostname", "kali"),
+                        os_info=msg.get("os_info", "Kali Linux"),
+                        tools=msg.get("tools", []),
+                        client_ip=client_ip,
+                        transport="ws",
+                        ws=websocket,
+                    )
+                    await websocket.send_text(_json.dumps({"type": "registered", "runner_id": runner_id}))
+
+                elif mtype == "ping":
+                    if runner_id:
+                        runner_manager.touch_runner(runner_id)
+                    await websocket.send_text(_json.dumps({"type": "pong"}))
+
+                elif mtype == "update":
+                    runner_manager.post_task_update(
+                        task_id=msg.get("task_id"),
+                        chunk=msg.get("chunk"),
+                        completed=msg.get("completed", False),
+                        return_code=msg.get("return_code"),
+                        error=msg.get("error"),
+                    )
+        except WebSocketDisconnect:
+            if runner_id:
+                runner_manager.unregister_runner(runner_id)
+        except Exception:
+            if runner_id:
+                runner_manager.unregister_runner(runner_id)
+
+    # ------------------------------------------------------------------
+    # Scope Guard & Rules of Engagement (RoE)
+    # ------------------------------------------------------------------
+    from cai.security.scope_guard import scope_guard
+
+    @app.get("/api/v1/security/scope", tags=["security"])
+    def get_target_scope():
+        """Retrieve active target scope configuration."""
+        return {
+            "enabled": scope_guard.is_enabled,
+            "scope": scope_guard.get_scope(),
+        }
+
+    @app.post("/api/v1/security/scope", tags=["security"])
+    async def set_target_scope(request: Request):
+        """Update active target scope."""
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        scope_val = body.get("scope", "")
+        if scope_val:
+            scope_guard.set_scope(scope_val)
+        if "enabled" in body:
+            scope_guard.set_enabled(bool(body["enabled"]))
+        return {
+            "status": "updated",
+            "enabled": scope_guard.is_enabled,
+            "scope": scope_guard.get_scope(),
+        }
+
+    # ------------------------------------------------------------------
+    # Persistent Audit Logging & Pentest Reports
+    # ------------------------------------------------------------------
+    from cai.audit.logger import audit_logger
+    from fastapi.responses import PlainTextResponse
+
+    @app.get("/api/v1/audit/sessions", tags=["audit"])
+    def list_audit_sessions():
+        """List all past penetration testing sessions stored on disk."""
+        return audit_logger.list_sessions()
+
+    @app.get("/api/v1/audit/sessions/{session_id}", tags=["audit"])
+    def get_audit_session_events(session_id: str):
+        """Get structured event log for a specific session."""
+        events = audit_logger.get_session_events(session_id)
+        if not events:
+            raise HTTPException(status_code=404, detail="Session log not found")
+        return events
+
+    @app.get("/api/v1/audit/sessions/{session_id}/report", tags=["audit"])
+    def get_session_report(session_id: str):
+        """Download or view synthesized Markdown penetration testing report."""
+        content = audit_logger.get_or_generate_report(session_id)
+        return PlainTextResponse(
+            content=content,
+            media_type="text/markdown",
+            headers={
+                "Content-Disposition": f'inline; filename="{session_id}_report.md"',
+            },
+        )
+
+    @app.get("/api/v1/audit/sessions/{session_id}/checkpoint", tags=["audit"])
+    def get_session_checkpoint(session_id: str):
+        """Retrieve the latest Autonomy Loop checkpoint state for a session."""
+        import re as _re
+        clean_id = _re.sub(r"[^A-Za-z0-9_-]", "_", session_id)
+        cp_path = audit_logger.log_dir / f"{clean_id}_checkpoint.json"
+        if not cp_path.is_file():
+            raise HTTPException(status_code=404, detail="Checkpoint not found for session")
+        return _json.loads(cp_path.read_text(encoding="utf-8"))
+
+    # ------------------------------------------------------------------
+    # SQLite Campaign State Store (Phase 3 — Trí nhớ chiến dịch dài hạn)
+    # ------------------------------------------------------------------
+    from cai.memory import campaign_memory
+
+    @app.get("/api/v1/memory/summary", tags=["memory"])
+    def get_campaign_memory_summary(target: str = ""):
+        """Return structured hosts, ports, endpoints, credentials, and findings from SQLite."""
+        return campaign_memory.get_summary(target=target)
+
+    @app.get("/api/v1/memory/context", tags=["memory"])
+    def get_campaign_memory_context(target: str = ""):
+        """Return the synthesized Markdown context block for a target."""
+        return {"target": target, "context": campaign_memory.build_context_for_target(target=target)}
+
+    @app.get("/api/v1/memory/graph", tags=["memory"])
+    def get_campaign_attack_graph(target: str = ""):
+        """Return hierarchical Attack Graph (Mindmap nodes and edges) from SQLite."""
+        return campaign_memory.build_attack_graph(target=target)
+
+    @app.delete("/api/v1/memory", tags=["memory"])
+    def clear_campaign_memory():
+        """Wipe all stored campaign memory in SQLite."""
+        campaign_memory.clear_all()
+        return {"status": "cleared"}
+
+    # ------------------------------------------------------------------
+    # Stage 7: Live Interactive Terminal & Manual Intervention
+    # ------------------------------------------------------------------
+    @app.get("/api/v1/runner/terminal/logs", tags=["runner"])
+    def get_runner_terminal_logs(since_seq: int = 0):
+        """Stream live command and output events from Kali Runner / Local Shell."""
+        return runner_manager.get_terminal_logs(since_seq=since_seq)
+
+    @app.delete("/api/v1/runner/terminal/logs", tags=["runner"])
+    def clear_runner_terminal_logs():
+        """Clear live terminal log buffer."""
+        runner_manager.clear_terminal_logs()
+        return {"status": "cleared"}
+
+    @app.post("/api/v1/runner/terminal/exec", tags=["runner"])
+    async def exec_runner_terminal_command(request: Request):
+        """Execute a manual command from the embedded WebUI terminal."""
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        command = (body.get("command") or "").strip()
+        if not command:
+            raise HTTPException(status_code=400, detail="Missing command")
+        timeout = int(body.get("timeout", 60))
+        target = (body.get("target") or "").strip()
+
+        loop = asyncio.get_running_loop()
+        res = await loop.run_in_executor(
+            None,
+            runner_manager.execute_manual,
+            command,
+            timeout,
+            True,
+        )
+        try:
+            campaign_memory.ingest_tool_output(
+                target=target,
+                tool_name="manual_terminal",
+                command=command,
+                output=res.get("output", ""),
+            )
+        except Exception:
+            pass
+        return res
+
+    # ------------------------------------------------------------------
+    # Built-in Mock Vulnerable Web Lab (Stage 5)
+    # ------------------------------------------------------------------
+    from cai.lab import mock_lab_manager
+
+    @app.get("/api/v1/lab/status", tags=["lab"])
+    def get_mock_lab_status():
+        """Retrieve Mock Lab status and challenge progress."""
+        return mock_lab_manager.get_status()
+
+    @app.post("/api/v1/lab/start", tags=["lab"])
+    def start_mock_lab(host: str = "0.0.0.0", port: int = 8888):
+        """Start the Mock Lab server in background."""
+        return mock_lab_manager.start(host=host, port=port)
+
+    @app.post("/api/v1/lab/stop", tags=["lab"])
+    def stop_mock_lab():
+        """Stop the Mock Lab server."""
+        return mock_lab_manager.stop()
+
+    # ------------------------------------------------------------------
     # Optional local web dashboard (served only for loopback convenience).
     # Enabled unless CAI_API_SERVE_UI is explicitly falsy. The directory is
     # a static, read-only single-page UI that consumes the SSE endpoints.
@@ -1075,23 +1408,53 @@ def create_cai_api_app(
             from fastapi.responses import FileResponse, RedirectResponse
             from fastapi.staticfiles import StaticFiles
 
-            ui_dir = Path(
-                os.getenv("CAI_API_UI_DIR")
-                or (Path(__file__).resolve().parents[3] / "webui")
-            )
-            index_file = ui_dir / "index.html"
-            if index_file.is_file():
+            root_dir = Path(__file__).resolve().parents[3]
+            frontend_dist = root_dir / "frontend" / "dist"
+            classic_ui_dir = Path(os.getenv("CAI_API_UI_DIR") or (root_dir / "webui"))
+
+            # Next-Gen React Three.js UI priority
+            if frontend_dist.is_dir() and (frontend_dist / "index.html").is_file():
+                dist_index = frontend_dist / "index.html"
+                assets_dir = frontend_dist / "assets"
+                if assets_dir.is_dir():
+                    app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="nextgen-assets")
+                    app.mount("/ui/assets", StaticFiles(directory=str(assets_dir)), name="nextgen-ui-assets")
+
+                @app.get("/ui", include_in_schema=False)
+                @app.get("/ui/", include_in_schema=False)
+                def _serve_nextgen_ui() -> FileResponse:
+                    return FileResponse(
+                        str(dist_index),
+                        headers={
+                            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+                            "Pragma": "no-cache",
+                            "Expires": "0",
+                        },
+                    )
+
+                # Classic 2D UI accessible at /ui/classic
+                if (classic_ui_dir / "index.html").is_file():
+                    @app.get("/ui/classic", include_in_schema=False)
+                    def _serve_classic_ui() -> FileResponse:
+                        return FileResponse(str(classic_ui_dir / "index.html"))
+
+                @app.get("/", include_in_schema=False)
+                def _root_redirect() -> RedirectResponse:
+                    return RedirectResponse(url="/ui")
+
+            elif (classic_ui_dir / "index.html").is_file():
+                classic_index = classic_ui_dir / "index.html"
                 app.mount(
                     "/ui/static",
-                    StaticFiles(directory=str(ui_dir)),
+                    StaticFiles(directory=str(classic_ui_dir)),
                     name="cai-ui-static",
                 )
 
                 @app.get("/ui", include_in_schema=False)
                 @app.get("/ui/", include_in_schema=False)
-                def _serve_ui() -> FileResponse:  # noqa: D401
+                def _serve_classic_ui_default() -> FileResponse:
                     return FileResponse(
-                        str(index_file),
+                        str(classic_index),
                         headers={
                             "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
                             "Pragma": "no-cache",
@@ -1100,7 +1463,7 @@ def create_cai_api_app(
                     )
 
                 @app.get("/", include_in_schema=False)
-                def _root_redirect() -> RedirectResponse:  # noqa: D401
+                def _root_redirect_classic() -> RedirectResponse:
                     return RedirectResponse(url="/ui")
         except Exception:
             # UI is best-effort; never block API startup on it.

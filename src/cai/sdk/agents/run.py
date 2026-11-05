@@ -247,11 +247,12 @@ class Runner:
                     )
 
                     if current_turn == 1:
+                        starting_ig = list(starting_agent.input_guardrails) if isinstance(starting_agent.input_guardrails, (list, tuple)) else []
+                        config_ig = list(run_config.input_guardrails) if run_config.input_guardrails else []
                         input_guardrail_results, turn_result = await asyncio.gather(
                             cls._run_input_guardrails(
                                 starting_agent,
-                                starting_agent.input_guardrails
-                                + (run_config.input_guardrails or []),
+                                starting_ig + config_ig,
                                 copy.deepcopy(input),
                                 context_wrapper,
                             ),

@@ -278,6 +278,11 @@ def get_agent_by_name(
         "grc agent": "compliance_agent",
         "continuous ops agent": "continuous_ops_agent",
         "continuous ops": "continuous_ops_agent",
+        "kali": "kali_pentester_agent",
+        "kali agent": "kali_pentester_agent",
+        "kali pentester": "kali_pentester_agent",
+        "kali pentester agent": "kali_pentester_agent",
+        "kali_pentester": "kali_pentester_agent",
     }
 
     available_agents = get_available_agents()

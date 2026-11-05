@@ -32,7 +32,7 @@ from cai.util import (
     cli_print_tool_output,
 )
 # OutputManager integration [T] — emit events for tool lifecycle
-from cai.output import OUTPUT, ToolStartEvent, ToolCompleteEvent, ToolErrorEvent
+from cai.output import OUTPUT, ToolStartEvent, ToolCompleteEvent, ToolErrorEvent, ToolStreamEvent
 # CAIConfig integration [B] — centralized config replaces os.getenv
 from cai.config import get_config as _get_config
 
@@ -1339,6 +1339,38 @@ async def run_command_async(
 
     # Wrap dispatch in try/except to emit ToolComplete/ToolError events [T]
     try:
+        # Scope Guard & Safety Gate check (Rules of Engagement)
+        try:
+            from cai.security import scope_guard
+            from cai.autonomy import AutonomyController
+            from cai.audit import audit_logger, get_active_session_id
+            safe_ok, safe_reason = AutonomyController.check_destructive_command(command)
+            if not safe_ok:
+                active_sid = session_id or get_active_session_id()
+                audit_logger.log_scope_violation(active_sid, command, safe_reason or "")
+                OUTPUT.emit(ToolCompleteEvent(
+                    tool_name=tool_name,
+                    call_id=call_id or "",
+                    output=safe_reason or "",
+                    exit_code=1,
+                    duration_seconds=0.01,
+                ))
+                return safe_reason
+            scope_ok, violation_reason = scope_guard.check_command(command)
+            if not scope_ok:
+                active_sid = session_id or get_active_session_id()
+                audit_logger.log_scope_violation(active_sid, command, violation_reason or "")
+                OUTPUT.emit(ToolCompleteEvent(
+                    tool_name=tool_name,
+                    call_id=call_id or "",
+                    output=violation_reason or "",
+                    exit_code=1,
+                    duration_seconds=0.01,
+                ))
+                return violation_reason
+        except Exception:
+            pass
+
         if session_id:
             import asyncio, functools
             loop = asyncio.get_event_loop()
@@ -1373,6 +1405,34 @@ async def run_command_async(
             active_container = _get_config().active_container or ""
         _cfg = _get_config()
         is_ssh_env = bool(_cfg.ssh_user and _cfg.ssh_host)
+
+        # --- Reverse Runner (Kali Linux VM) ---
+        try:
+            from cai.runner.manager import runner_manager
+            if runner_manager.is_active():
+                def _runner_stream_cb(chunk: str):
+                    if stream and call_id:
+                        OUTPUT.emit(ToolStreamEvent(
+                            tool_name=tool_name,
+                            call_id=call_id,
+                            chunk=chunk,
+                        ))
+
+                res = await runner_manager.execute_async(
+                    command=command,
+                    timeout=timeout,
+                    stream_callback=_runner_stream_cb if stream else None,
+                )
+                output_str = res.get("output", "")
+                OUTPUT.emit(ToolCompleteEvent(
+                    tool_name=tool_name,
+                    call_id=call_id or "",
+                    output=str(output_str)[:500] if output_str else "",
+                    duration_seconds=time.time() - _start_ts,
+                ))
+                return output_str
+        except Exception:
+            pass
 
         if active_container and not is_ssh_env:
             result = await _run_docker_async(
@@ -1567,10 +1627,70 @@ def run_command(
                 return output
             return f"Command sent to session {label}. No output captured."
 
+        # Scope Guard & Safety Gate check (Rules of Engagement)
+        try:
+            from cai.security import scope_guard
+            from cai.autonomy import AutonomyController
+            from cai.audit import audit_logger, get_active_session_id
+            safe_ok, safe_reason = AutonomyController.check_destructive_command(command)
+            if not safe_ok:
+                active_sid = session_id or get_active_session_id()
+                audit_logger.log_scope_violation(active_sid, command, safe_reason or "")
+                stop_active_timer()
+                start_idle_timer()
+                return safe_reason
+            scope_ok, violation_reason = scope_guard.check_command(command)
+            if not scope_ok:
+                active_sid = session_id or get_active_session_id()
+                audit_logger.log_scope_violation(active_sid, command, violation_reason or "")
+                stop_active_timer()
+                start_idle_timer()
+                return violation_reason
+        except Exception:
+            pass
+
         # --- Environment detection (via CAIConfig) ---
         _cfg_sync = _get_config()
         active_container = _cfg_sync.active_container or ""
         is_ssh_env = bool(_cfg_sync.ssh_user and _cfg_sync.ssh_host)
+
+        # --- Reverse Runner (Kali Linux VM) ---
+        try:
+            from cai.runner.manager import runner_manager
+            if runner_manager.is_active():
+                from cai.util import start_tool_streaming, update_tool_streaming, finish_tool_streaming
+                tool_args = args.copy() if isinstance(args, dict) else {"args": str(args or "")}
+                tool_args["environment"] = "Kali Runner"
+                tool_args["full_command"] = command
+                token_info = _get_agent_token_info()
+
+                if stream:
+                    call_id = start_tool_streaming(tool_name, tool_args, call_id, token_info)
+                    update_tool_streaming(tool_name, tool_args, f"Executing on Kali VM: {command}\n...", call_id, token_info)
+
+                def _sync_stream_cb(chunk: str):
+                    if stream:
+                        update_tool_streaming(tool_name, tool_args, chunk, call_id, token_info)
+
+                start_ts = time.time()
+                res = runner_manager.execute_sync(
+                    command=command,
+                    timeout=timeout,
+                    stream_callback=_sync_stream_cb if stream else None,
+                )
+                duration = time.time() - start_ts
+                output_str = res.get("output", "")
+                if stream:
+                    finish_tool_streaming(
+                        tool_name, tool_args, output_str, call_id,
+                        {"status": "completed", "environment": "Kali VM", "tool_time": duration},
+                        token_info,
+                    )
+                stop_active_timer()
+                start_idle_timer()
+                return output_str
+        except Exception:
+            pass
 
         # --- Docker ---
         if active_container and not is_ssh_env:

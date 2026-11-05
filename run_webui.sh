@@ -14,7 +14,7 @@ elif [ -f "../.env" ]; then
     _load_env "../.env"
 fi
 
-export CAI_API_HOST="${CAI_API_HOST:-127.0.0.1}"
+export CAI_API_HOST="${CAI_API_HOST:-0.0.0.0}"
 export CAI_API_PORT="${CAI_API_PORT:-8000}"
 export CAI_API_SERVE_UI="${CAI_API_SERVE_UI:-true}"
 export CAI_API_MODE="true"

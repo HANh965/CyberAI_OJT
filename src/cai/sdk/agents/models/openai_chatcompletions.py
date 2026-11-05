@@ -366,7 +366,8 @@ class OpenAIChatCompletionsModel(Model):
         self._client = openai_client
         # Check if we're using OLLAMA models
         _m = str(model).lower()
-        self.is_ollama = (
+        _is_cloud = any(_m.startswith(p) for p in ("groq/", "cerebras/", "deepseek/", "gemini/", "openai/", "anthropic/"))
+        self.is_ollama = not _is_cloud and (
             (os.getenv("OLLAMA") is not None and os.getenv("OLLAMA").lower() != "false")
             or _m.startswith("ollama")
             or "qwen" in _m
@@ -1887,7 +1888,8 @@ class OpenAIChatCompletionsModel(Model):
                 is_ollama = False
 
                 model_str = str(self.model).lower()
-                is_ollama = (
+                _is_cloud_str = any(model_str.startswith(p) for p in ("groq/", "cerebras/", "deepseek/", "gemini/", "openai/", "anthropic/"))
+                is_ollama = not _is_cloud_str and (
                     self.is_ollama
                     or "ollama" in model_str
                     or ":" in model_str
@@ -3986,6 +3988,10 @@ class OpenAIChatCompletionsModel(Model):
                     f"Verify OLLAMA_API_KEY and OLLAMA_API_BASE are configured correctly."
                 ) from e
         
+        _cur_m = str(kwargs.get("model") or self.model).lower()
+        if any(_cur_m.startswith(p) for p in ("groq/", "cerebras/", "deepseek/", "gemini/", "openai/", "anthropic/")):
+            self.is_ollama = False
+
         while retry_count < max_retries:
             try:
                 cfg = get_config()

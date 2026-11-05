@@ -190,6 +190,12 @@ cai-app-ios/
 learn-claude-code
 gemini-cli
 
+# Node / Frontend
+node_modules/
+**/node_modules/
+frontend/dist/
+frontend/.vite/
+
 # runtime artifacts (recon outputs, bench results, refusal traces)
 bench_results/
 network_scan/

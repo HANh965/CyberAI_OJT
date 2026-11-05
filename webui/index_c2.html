@@ -1,0 +1,1171 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CAI_LO · Command & Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<style>
+/* =========================================================================
+ * CAI_LO — Sci-Fi Tactical C2 Dashboard
+ * Single file, no build step. Drop-in replacement wired to the SAME FastAPI
+ * SSE contract as index.html. Includes an offline DEMO MODE.
+ * ========================================================================= */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Orbitron:wght@500;700;900&display=swap');
+
+:root{
+  --bg:#05070a;            /* OLED black */
+  --panel:#0a0e15;
+  --panel-2:#0c1119;
+  --panel-3:#0e141e;
+  --line:#182230;          /* 1px hairline */
+  --line-2:#243244;
+  --muted:#5c6b7e;
+  --text:#c3d0de;
+  --text-dim:#8795a6;
+  --cyan:#39d6ff;
+  --cyan-dim:#1c7d99;
+  --amber:#ffb340;
+  --crimson:#ff3b47;
+  --green:#3ddc84;
+  --violet:#9b7bff;
+  --glow-cyan:0 0 12px rgba(57,214,255,.45);
+  --glow-crimson:0 0 14px rgba(255,59,71,.55);
+  --chamfer:10px;          /* cắt góc 45° */
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12.5px; line-height:1.5; overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+/* nền lưới mờ + glow góc */
+body::before{
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(1200px 700px at 78% -8%, rgba(57,214,255,.06), transparent 60%),
+    radial-gradient(900px 600px at 0% 110%, rgba(155,123,255,.05), transparent 60%),
+    linear-gradient(var(--line) 1px, transparent 1px) 0 0/44px 44px,
+    linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0/44px 44px;
+  background-blend-mode:normal;
+  opacity:.5;
+  -webkit-mask-image:radial-gradient(120% 120% at 50% 40%, #000 55%, transparent 100%);
+          mask-image:radial-gradient(120% 120% at 50% 40%, #000 55%, transparent 100%);
+}
+/* scanlines rất nhẹ */
+body::after{
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:999;
+  background:repeating-linear-gradient(0deg, rgba(0,0,0,.14) 0 1px, transparent 1px 3px);
+  opacity:.35; mix-blend-mode:multiply;
+}
+body.alert::before{background:
+    radial-gradient(1200px 700px at 78% -8%, rgba(255,59,71,.10), transparent 60%),
+    linear-gradient(var(--line) 1px, transparent 1px) 0 0/44px 44px,
+    linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0/44px 44px;}
+
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:0}
+::-webkit-scrollbar-thumb:hover{background:var(--cyan-dim)}
+
+/* khung cắt góc kiểu tactical */
+.panel{
+  position:relative; display:flex; flex-direction:column; min-height:0; background:
+    linear-gradient(180deg, rgba(255,255,255,.015), transparent 40%), var(--panel);
+  border:1px solid var(--line);
+  clip-path:polygon(var(--chamfer) 0, 100% 0, 100% calc(100% - var(--chamfer)), calc(100% - var(--chamfer)) 100%, 0 100%, 0 var(--chamfer));
+}
+.panel.lit{border-color:var(--line-2); box-shadow:inset 0 0 0 1px rgba(57,214,255,.05)}
+
+.phead{
+  display:flex; align-items:center; gap:8px; padding:7px 11px;
+  border-bottom:1px solid var(--line); background:var(--panel-2);
+  font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-dim);
+}
+.phead .tick{color:var(--cyan); font-weight:700}
+.phead .sp{flex:1}
+.phead .mini{font-size:10px; color:var(--muted); letter-spacing:.06em; text-transform:none}
+
+/* ---------- layout khung chính: HUD / 3 cột / command bar ---------- */
+#app{position:relative; z-index:1; height:100%; display:grid;
+  grid-template-rows:54px 1fr 46px; gap:8px; padding:8px;}
+
+/* ===================== HUD BAR ===================== */
+#hud{display:flex; align-items:stretch; gap:8px; min-width:0}
+.hud-block{display:flex; align-items:center; gap:10px; padding:0 14px;
+  background:var(--panel); border:1px solid var(--line);
+  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);}
+#hud-brand{gap:12px}
+.logo{font-family:'Orbitron',sans-serif; font-weight:900; font-size:16px; letter-spacing:.14em;
+  color:#eaf6ff; text-shadow:var(--glow-cyan); white-space:nowrap}
+.logo b{color:var(--cyan)}
+.logo .sub{display:block; font-family:'JetBrains Mono',monospace; font-weight:500;
+  font-size:8.5px; letter-spacing:.34em; color:var(--muted); margin-top:1px}
+.hud-target{min-width:0; flex:0 1 auto}
+.lab{font-size:9px; letter-spacing:.18em; color:var(--muted); text-transform:uppercase}
+.hud-target .val{font-size:13px; color:var(--amber); font-weight:700; max-width:220px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-shadow:0 0 8px rgba(255,179,64,.3)}
+
+/* phase rail */
+#phase-rail{flex:1; display:flex; align-items:center; gap:0; min-width:0; overflow:hidden}
+.ph{position:relative; flex:1; min-width:0; display:flex; flex-direction:column; align-items:center;
+  gap:3px; padding:0 4px}
+.ph .bar{height:4px; width:100%; background:var(--line); position:relative; overflow:hidden}
+.ph .bar::after{content:""; position:absolute; inset:0; width:0; background:var(--cyan);
+  box-shadow:var(--glow-cyan); transition:width .5s ease}
+.ph[data-st="done"] .bar::after{width:100%; background:var(--green); box-shadow:0 0 10px rgba(61,220,132,.5)}
+.ph[data-st="running"] .bar::after{width:100%; background:var(--cyan); animation:barpulse 1.2s infinite}
+@keyframes barpulse{0%,100%{opacity:.5}50%{opacity:1}}
+.ph .nm{font-size:8.5px; letter-spacing:.08em; color:var(--muted); white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; max-width:100%; text-transform:uppercase}
+.ph[data-st="done"] .nm,.ph[data-st="running"] .nm{color:var(--text)}
+
+/* telemetry */
+#hud-tele{gap:16px; font-size:11px}
+.tele{display:flex; flex-direction:column; align-items:flex-start; line-height:1.15}
+.tele .k{font-size:8px; letter-spacing:.14em; color:var(--muted); text-transform:uppercase}
+.tele .v{font-size:13px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums}
+.tele .v.cy{color:var(--cyan)} .tele .v.am{color:var(--amber)} .tele .v.cr{color:var(--crimson)} .tele .v.gr{color:var(--green)}
+.tele .v.over{color:var(--crimson)}
+
+.live-dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+.live-dot.live{background:var(--cyan); box-shadow:var(--glow-cyan); animation:blink 1s infinite}
+.live-dot.err{background:var(--crimson); box-shadow:var(--glow-crimson)}
+.live-dot.done{background:var(--green)}
+@keyframes blink{50%{opacity:.25}}
+
+/* ===================== GRID 3 CỘT ===================== */
+#grid{display:grid; grid-template-columns:330px 1fr 350px; gap:8px; min-height:0}
+.col{display:flex; flex-direction:column; gap:8px; min-height:0; min-width:0}
+#col-center{display:grid; grid-template-rows:minmax(0,46%) minmax(0,54%); gap:8px}
+
+/* ---- control panel ---- */
+#control{flex:none}
+#control .body{padding:10px 11px; display:flex; flex-direction:column; gap:8px}
+label.fl{font-size:9px; letter-spacing:.12em; color:var(--muted); text-transform:uppercase; display:block; margin-bottom:3px}
+input,select,textarea{
+  width:100%; background:var(--panel-3); border:1px solid var(--line-2); color:var(--text);
+  font-family:inherit; font-size:12px; padding:7px 9px; border-radius:0; outline:none;
+}
+input:focus,select:focus,textarea:focus{border-color:var(--cyan); box-shadow:inset 0 0 0 1px rgba(57,214,255,.25)}
+textarea{resize:vertical; min-height:52px; line-height:1.45}
+.row2{display:grid; grid-template-columns:1fr 1fr; gap:8px}
+.row-chk{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--text-dim)}
+.row-chk input{width:auto}
+.btns{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:2px}
+.btn{cursor:pointer; border:1px solid var(--line-2); background:var(--panel-3); color:var(--text);
+  font-family:inherit; font-size:12px; font-weight:700; letter-spacing:.06em; padding:9px 10px;
+  text-transform:uppercase; transition:.15s; display:flex; align-items:center; justify-content:center; gap:6px}
+.btn:hover{border-color:var(--cyan); color:#eaf6ff}
+.btn.go{background:linear-gradient(180deg,#0e3a2a,#0a2a1f); border-color:#1f7a52; color:var(--green)}
+.btn.go:hover{box-shadow:0 0 14px rgba(61,220,132,.3); border-color:var(--green)}
+.btn.stop{background:linear-gradient(180deg,#3a0e12,#2a0a0e); border-color:#7a1f28; color:var(--crimson)}
+.btn.stop:hover{box-shadow:var(--glow-crimson); border-color:var(--crimson)}
+.btn:disabled{opacity:.35; cursor:not-allowed; box-shadow:none !important; border-color:var(--line-2) !important; color:var(--muted)}
+.btn.ghost{font-weight:500; font-size:10.5px; letter-spacing:.08em; padding:6px 8px; text-transform:none}
+.conn{font-size:10px; padding:5px 9px; border:1px solid var(--line); background:var(--panel-3); color:var(--muted)}
+.conn.ok{color:var(--green); border-color:#1f6f47}
+.conn.bad{color:var(--crimson); border-color:#7a1f28}
+
+/* combobox model */
+.combo-wrap{position:relative}
+#model-panel{position:absolute; left:0; right:0; top:100%; z-index:40; max-height:240px; overflow:auto;
+  background:var(--panel-2); border:1px solid var(--cyan-dim); margin-top:2px}
+#model-panel[hidden]{display:none}
+.combo-count{font-size:9.5px; color:var(--muted); padding:5px 9px; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--panel-2)}
+.combo-item{display:flex; justify-content:space-between; gap:8px; padding:6px 9px; cursor:pointer; font-size:11px}
+.combo-item:hover,.combo-item.active{background:rgba(57,214,255,.1)}
+.ci-name{color:var(--text)} .ci-prov{color:var(--muted); font-size:9.5px}
+.combo-empty{padding:8px 9px; font-size:10.5px; color:var(--muted)}
+
+/* ---- CoT stream ---- */
+#cot{flex:1; min-height:0}
+#cot .body{flex:1; overflow:auto; padding:8px 9px; display:flex; flex-direction:column; gap:5px}
+.cot-ln{display:flex; gap:7px; align-items:flex-start; animation:slideIn .28s ease}
+@keyframes slideIn{from{opacity:0; transform:translateX(-6px)}to{opacity:1}}
+.cot-tag{flex:none; font-size:8.5px; font-weight:800; letter-spacing:.08em; padding:2px 5px; margin-top:1px;
+  border:1px solid currentColor; line-height:1; min-width:64px; text-align:center}
+.cot-tag.THOUGHT{color:var(--violet)} .cot-tag.PLAN{color:var(--cyan)} .cot-tag.ACTION{color:var(--amber)}
+.cot-tag.OBSERVE{color:var(--text-dim)} .cot-tag.VULN{color:var(--crimson)} .cot-tag.SYS{color:var(--muted)}
+.cot-tx{font-size:11px; color:var(--text-dim); word-break:break-word}
+.cot-ln.VULN .cot-tx{color:#ffd0d3}
+
+/* ---- Swarm graph ---- */
+#swarm{min-height:0}
+#swarm .body{position:relative; flex:1; min-height:0; overflow:hidden}
+#swarm svg{position:absolute; inset:0; width:100%; height:100%}
+.sg-legend{position:absolute; left:10px; bottom:9px; display:flex; gap:12px; font-size:9px; color:var(--muted); z-index:2}
+.sg-legend i{display:inline-block; width:8px;height:8px;margin-right:4px;vertical-align:middle}
+.node-label{font-size:9.5px; fill:var(--text); font-family:'JetBrains Mono',monospace}
+.node-sub{font-size:8px; fill:var(--muted)}
+
+/* ---- Terminal multiplexer ---- */
+#term{min-height:0}
+#term .toolbar{display:flex; align-items:center; gap:6px; padding:5px 9px; border-bottom:1px solid var(--line); background:var(--panel-2)}
+#term .toolbar input{height:26px; font-size:11px; padding:3px 8px; max-width:200px}
+.chip{cursor:pointer; font-size:9.5px; letter-spacing:.05em; padding:3px 7px; border:1px solid var(--line-2);
+  color:var(--muted); text-transform:uppercase; user-select:none}
+.chip.on{color:var(--cyan); border-color:var(--cyan-dim); background:rgba(57,214,255,.08)}
+#term .body{flex:1; overflow:auto; padding:6px 10px; background:#04060a; position:relative}
+#term .body::before{content:""; position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(120% 100% at 50% 0%, rgba(57,214,255,.03), transparent 60%)}
+.ln{display:flex; gap:8px; padding:1px 0; animation:fadeIn .2s}
+@keyframes fadeIn{from{opacity:0}}
+.ln .ts{flex:none; color:#30506a; font-size:10px; user-select:none}
+.ln .msg{min-width:0; word-break:break-word; white-space:pre-wrap; color:var(--text-dim); font-size:11.5px}
+.ln.tool .msg{color:var(--cyan)} .ln.tool .arrow{color:var(--amber); font-weight:700}
+.ln.agent .msg{color:#b9c6d6} .ln.handoff .msg{color:var(--violet)}
+.ln.sys .msg{color:var(--muted)} .ln.err .msg{color:var(--crimson)}
+.ln.finding .msg{color:#ffd0d3} .ln.high{border-left:2px solid var(--crimson); padding-left:6px; margin-left:-8px; background:rgba(255,59,71,.05)}
+.ln.med{border-left:2px solid var(--amber); padding-left:6px; margin-left:-8px}
+.ln.flash{animation:flash 1.2s}
+@keyframes flash{0%,100%{background:transparent}30%{background:rgba(57,214,255,.18)}}
+.tag{font-size:9px; font-weight:800; color:var(--crimson)}
+.pre-block{margin:3px 0 0; padding:6px 8px; background:#070b11; border:1px solid var(--line); overflow:auto; font-size:11px; color:#9fb0c2}
+.tool-out-details{margin-top:2px}
+.tool-out-summary{cursor:pointer; color:var(--text-dim); font-size:11px}
+.agent-msg{white-space:pre-wrap}
+.final-report{border:1px solid #1f7a52; background:rgba(61,220,132,.05); padding:8px 10px; margin-top:4px}
+.final-title{color:var(--green); font-weight:700; margin-bottom:4px}
+.final-content{white-space:pre-wrap; font-size:11px; color:#cfe}
+#scroll-btn{position:absolute; right:14px; bottom:12px; z-index:5; display:none; cursor:pointer;
+  background:var(--panel-2); border:1px solid var(--cyan-dim); color:var(--cyan); padding:5px 10px; font-size:10px}
+#scroll-btn.show{display:block}
+
+/* ---- Right column: loot / memory / findings ---- */
+.loot-grid{display:grid; grid-template-columns:1fr 1fr; gap:7px; padding:9px}
+.loot{border:1px solid var(--line); background:var(--panel-3); padding:8px 9px; position:relative; overflow:hidden}
+.loot .k{font-size:8.5px; letter-spacing:.12em; color:var(--muted); text-transform:uppercase}
+.loot .v{font-size:22px; font-weight:800; line-height:1.1; margin-top:2px; font-variant-numeric:tabular-nums}
+.loot.ports .v{color:var(--cyan)} .loot.creds .v{color:var(--amber)}
+.loot.vuln .v{color:var(--crimson)} .loot.flags .v{color:var(--green)}
+.loot .spark{position:absolute; right:7px; bottom:5px; font-size:8px; color:var(--muted)}
+
+#mem{flex:1; min-height:0}
+#mem .body{flex:1; overflow:auto; padding:8px 10px; font-size:11px; line-height:1.55}
+.mem-sec{font-weight:700; margin-top:6px}
+.mem-sec.p{color:var(--green)} .mem-sec.e{color:var(--cyan)} .mem-sec.c{color:var(--amber)} .mem-sec.f{color:var(--crimson)}
+.mem-row{color:var(--text-dim)}
+
+#find{min-height:0; flex:none; max-height:40%}
+#find .body{overflow:auto; padding:8px 10px; display:flex; flex-direction:column; gap:7px}
+.find-card{border:1px solid var(--line-2); background:var(--panel-3); padding:7px 8px; position:relative}
+.find-card.fp{opacity:.45}
+.find-top{display:flex; align-items:center; gap:7px; margin-bottom:4px}
+.sev-badge{font-size:8.5px; font-weight:800; padding:2px 6px; border:1px solid currentColor; letter-spacing:.06em}
+.sev-badge.high{color:var(--crimson)} .sev-badge.med{color:var(--amber)} .sev-badge.low{color:var(--text-dim)}
+.find-src{font-size:9.5px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.find-ex{font-size:10.5px; color:var(--text-dim); white-space:pre-wrap; word-break:break-word; max-height:72px; overflow:auto}
+.find-act{display:flex; gap:6px; margin-top:6px; align-items:center}
+.find-act select{width:auto; font-size:10px; padding:3px 5px}
+.find-act button{cursor:pointer; font-size:9.5px; padding:3px 7px; background:var(--panel-2); border:1px solid var(--line-2); color:var(--text-dim)}
+.find-act button:hover{border-color:var(--cyan); color:var(--cyan)}
+.find-empty{font-size:10.5px; color:var(--muted); line-height:1.5}
+
+/* runner line */
+#runner{display:flex; align-items:center; gap:9px; padding:7px 11px; font-size:10.5px}
+#runner .rd{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+#runner .rbadge{font-size:9px; padding:2px 7px; border:1px solid var(--line-2); color:var(--muted)}
+#runner .rdetails{color:var(--text-dim); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+
+/* ===================== COMMAND BAR ===================== */
+#cmdbar{display:flex; flex-direction:row; align-items:center; gap:10px; padding:0 14px; min-width:0}
+#status-text{flex:1; min-width:0; color:var(--text-dim); font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+#status-text .caret{color:var(--cyan); font-weight:700}
+#watchdog{color:var(--amber); font-size:10.5px}
+#watchdog.stall{color:var(--crimson)}
+.kbd{font-size:9.5px; color:var(--muted); border:1px solid var(--line-2); padding:2px 6px; letter-spacing:.04em}
+.kbd b{color:var(--cyan)}
+
+/* ===================== Command Palette ===================== */
+#palette-ov{position:fixed; inset:0; z-index:200; background:rgba(2,4,7,.72); backdrop-filter:blur(3px); display:none}
+#palette-ov.show{display:block}
+#palette{position:absolute; left:50%; top:16%; transform:translateX(-50%); width:min(640px,92vw);
+  background:var(--panel); border:1px solid var(--cyan-dim); box-shadow:0 20px 70px rgba(0,0,0,.6), var(--glow-cyan);
+  clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px)}
+#palette input{border:none; border-bottom:1px solid var(--line); font-size:15px; padding:14px 16px; background:transparent}
+#palette input:focus{box-shadow:none; border-color:var(--cyan-dim)}
+.pal-list{max-height:320px; overflow:auto; padding:6px}
+.pal-item{display:flex; gap:12px; align-items:center; padding:9px 12px; cursor:pointer}
+.pal-item.active,.pal-item:hover{background:rgba(57,214,255,.1)}
+.pal-cmd{color:var(--cyan); font-weight:700; min-width:140px}
+.pal-desc{color:var(--text-dim); font-size:11px}
+
+/* ===================== toast / demo banner ===================== */
+#demo-flag{position:fixed; left:50%; top:60px; transform:translateX(-50%); z-index:150;
+  background:rgba(255,179,64,.12); border:1px solid var(--amber); color:var(--amber);
+  font-size:11px; font-weight:700; letter-spacing:.1em; padding:6px 16px; display:none; text-transform:uppercase}
+#demo-flag.show{display:block; animation:slideIn .3s}
+
+.scramble{font-variant-ligatures:none}
+details>summary{list-style:none} details>summary::-webkit-details-marker{display:none}
+.hide{display:none !important}
+@media (max-width:1200px){
+  #grid{grid-template-columns:300px 1fr 300px}
+  body{font-size:12px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ================= HUD BAR ================= -->
+  <header id="hud">
+    <div class="hud-block" id="hud-brand">
+      <div class="logo"><b>CAI</b>_LO<span class="sub">COMMAND&nbsp;&amp;&nbsp;CONTROL</span></div>
+      <div class="live-dot" id="live-dot" title="trạng thái phiên"></div>
+    </div>
+    <div class="hud-block hud-target">
+      <div>
+        <div class="lab">Target&nbsp;/&nbsp;Scope</div>
+        <div class="val scramble" id="target-label">—</div>
+      </div>
+    </div>
+    <div class="hud-block" id="phase-rail-wrap" style="flex:1;min-width:0;padding:0 14px">
+      <div id="phase-rail"></div>
+    </div>
+    <div class="hud-block" id="hud-tele">
+      <div class="tele"><span class="k">Elapsed</span><span class="v cy" id="t-clock">00:00</span></div>
+      <div class="tele"><span class="k">Turns</span><span class="v" id="t-turns">0/30</span></div>
+      <div class="tele"><span class="k">Cycle</span><span class="v am" id="t-cycle">—</span></div>
+      <div class="tele"><span class="k">Tok/s</span><span class="v" id="t-tps">0</span></div>
+    </div>
+  </header>
+
+  <!-- ================= GRID ================= -->
+  <main id="grid">
+
+    <!-- ===== LEFT ===== -->
+    <section class="col" id="col-left">
+      <div class="panel lit" id="control">
+        <div class="phead"><span class="tick">▸</span> Mission Control <span class="sp"></span>
+          <span class="mini" id="demo-pill"></span></div>
+        <div class="body">
+          <div>
+            <label class="fl" for="in-target">Target / Scope (CIDR·host·URL)</label>
+            <input id="in-target" placeholder="vd: 10.10.11.24  ·  demo.lab" autocomplete="off" />
+          </div>
+          <div>
+            <label class="fl" for="in-prompt">Nhiệm vụ (prompt)</label>
+            <textarea id="in-prompt" placeholder="vd: Trinh sát và liệt kê dịch vụ mục tiêu, tìm điểm yếu web, báo cáo."></textarea>
+          </div>
+          <div class="row2">
+            <div>
+              <label class="fl" for="in-agent">Agent</label>
+              <select id="in-agent"><option value="">(mặc định)</option></select>
+            </div>
+            <div class="combo-wrap">
+              <label class="fl" for="in-model">Model</label>
+              <input id="in-model" placeholder="auto (.env)" autocomplete="off" />
+              <div id="model-panel" hidden></div>
+            </div>
+          </div>
+          <div class="row2">
+            <div>
+              <label class="fl" for="in-turns">Ngân sách lượt</label>
+              <input id="in-turns" type="number" value="30" min="1" />
+            </div>
+            <div style="display:flex;align-items:flex-end;padding-bottom:1px">
+              <label class="row-chk"><input type="checkbox" id="in-autonomy" checked /> Autonomy loop</label>
+            </div>
+          </div>
+          <div class="btns">
+            <button class="btn go" id="btn-start">▶ Khởi chạy</button>
+            <button class="btn stop" id="btn-stop" disabled>■ Dừng</button>
+          </div>
+          <div class="btns" style="grid-template-columns:1fr 1fr 1fr">
+            <button class="btn ghost" id="btn-demo">◈ Demo</button>
+            <button class="btn ghost" id="btn-clear">⌫ Xóa log</button>
+            <button class="btn ghost" id="btn-palette">⌘ Palette</button>
+          </div>
+          <details style="margin-top:2px">
+            <summary class="fl" style="cursor:pointer">▸ Kết nối API</summary>
+            <div style="display:flex;flex-direction:column;gap:7px;margin-top:7px">
+              <input id="in-api" placeholder="API base (trống = cùng host)" autocomplete="off" />
+              <input id="in-key" type="password" placeholder="X-CAI-API-Key (nếu có)" autocomplete="off" />
+              <div class="conn" id="conn"><span id="conn-text">Chưa kết nối</span></div>
+              <label class="row-chk"><input type="checkbox" id="chk-redact" checked />
+                <span id="redact-label" class="on">🔒 Che credential (log/export)</span></label>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <div class="panel" id="cot">
+        <div class="phead"><span class="tick">▸</span> Chain-of-Thought <span class="sp"></span>
+          <span class="mini" id="cot-count">0</span></div>
+        <div class="body" id="cot-body">
+          <div class="cot-ln SYS"><span class="cot-tag SYS">IDLE</span><span class="cot-tx">Luồng suy luận của agent sẽ hiện ở đây: THOUGHT · PLAN · ACTION · OBSERVE · VULN.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== CENTER ===== -->
+    <section id="col-center">
+      <div class="panel lit" id="swarm">
+        <div class="phead"><span class="tick">▸</span> Agent Swarm Graph <span class="sp"></span>
+          <span class="mini" id="swarm-meta">orchestrator idle</span></div>
+        <div class="body" id="swarm-body">
+          <svg id="swarm-svg" viewBox="0 0 1000 560" preserveAspectRatio="xMidYMid meet"></svg>
+          <div class="sg-legend">
+            <span><i style="background:var(--amber)"></i>thinking</span>
+            <span><i style="background:var(--cyan)"></i>running tool</span>
+            <span><i style="background:var(--crimson)"></i>vuln / shell</span>
+            <span><i style="background:var(--green)"></i>done</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel" id="term">
+        <div class="phead"><span class="tick">▸</span> Live Terminal <span class="sp"></span>
+          <span class="mini" id="log-count">0 sự kiện</span></div>
+        <div class="toolbar">
+          <input id="log-search" placeholder="lọc log…" autocomplete="off" />
+          <div id="log-chips" style="display:flex;gap:5px;flex-wrap:wrap">
+            <span class="chip on" data-kind="tool">tool</span>
+            <span class="chip on" data-kind="agent">agent</span>
+            <span class="chip on" data-kind="finding">vuln</span>
+            <span class="chip on" data-kind="handoff">handoff</span>
+            <span class="chip on" data-kind="sys">sys</span>
+            <span class="chip on" data-kind="err">err</span>
+          </div>
+          <span class="sp" style="flex:1"></span>
+          <span class="mini" id="filter-count" style="color:var(--muted)"></span>
+          <span class="chip" id="btn-copy-visible">⧉ chép</span>
+        </div>
+        <div class="body" id="log"></div>
+        <div id="scroll-btn">↓ xuống cuối</div>
+      </div>
+    </section>
+
+    <!-- ===== RIGHT ===== -->
+    <section class="col" id="col-right">
+      <div class="panel lit">
+        <div class="phead"><span class="tick">▸</span> Loot &amp; Telemetry</div>
+        <div class="loot-grid">
+          <div class="loot ports"><div class="k">Open Ports</div><div class="v" id="loot-ports">0</div><span class="spark">tcp/udp</span></div>
+          <div class="loot creds"><div class="k">Creds</div><div class="v" id="loot-creds">0</div><span class="spark">user:pass</span></div>
+          <div class="loot vuln"><div class="k">Vuln hi/med</div><div class="v" id="loot-vuln">0</div><span class="spark" id="loot-vuln-med">0 med</span></div>
+          <div class="loot flags"><div class="k">Flags</div><div class="v" id="loot-flags">0</div><span class="spark">🚩</span></div>
+        </div>
+      </div>
+
+      <div class="panel" id="mem">
+        <div class="phead"><span class="tick">▸</span> Campaign Memory <span class="sp"></span>
+          <button class="chip" id="btn-clear-mem" title="Xóa SQLite">⌫ clear</button></div>
+        <div style="padding:6px 10px 0;font-size:10px;color:var(--muted)" id="mem-stats">—</div>
+        <div class="body" id="mem-list"><span style="color:var(--muted)">Dữ kiện host/port/cred/finding (SQLite) sẽ hiện ở đây.</span></div>
+      </div>
+
+      <div class="panel" id="find">
+        <div class="phead"><span class="tick">▸</span> Findings Triage <span class="sp"></span>
+          <button class="chip" id="btn-find-md">.md</button>
+          <button class="chip" id="btn-find-json">.json</button>
+          <button class="chip" id="btn-report">report</button></div>
+        <div class="body" id="find-list">
+          <div class="find-empty">Chưa có phát hiện. Kết quả nghi có lỗ hổng sẽ vào đây để phân loại (giả/thật · chỉnh mức · nhảy tới log).</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ================= COMMAND BAR ================= -->
+  <footer class="panel" id="cmdbar">
+    <span id="runner" style="padding:0;gap:8px">
+      <span class="rd" id="runner-dot"></span>
+      <span class="rbadge" id="runner-badge">Kali: —</span>
+    </span>
+    <span id="status-text"><span class="caret">❯</span> sẵn sàng. Nhập nhiệm vụ rồi Khởi chạy, hoặc bấm ◈ Demo.</span>
+    <span id="watchdog" class="hide"></span>
+    <span class="rdetails mini" id="runner-details" style="max-width:220px"></span>
+    <span class="kbd"><b>⌘K</b> palette</span>
+    <span class="kbd"><b>⌃↵</b> chạy</span>
+    <span class="kbd"><b>Esc</b> dừng</span>
+  </footer>
+</div>
+
+<div id="demo-flag">◈ DEMO MODE · dữ liệu lab mô phỏng</div>
+
+<!-- Command palette -->
+<div id="palette-ov">
+  <div id="palette">
+    <input id="pal-input" placeholder="Gõ lệnh:  /target  /model  /agent  /start  /stop  /demo  /clear …" autocomplete="off" />
+    <div class="pal-list" id="pal-list"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ==========================================================================
+ * Dữ liệu & heuristic — GIỮ NGUYÊN hợp đồng với backend index.html gốc
+ * ========================================================================== */
+const PHASES = [
+  { key:"recon",  label:"Trinh sát",      kw:/\b(whois|dnsrecon|dnsenum|sublist3r|subfinder|amass|theharvester|dig|host|nslookup|recon|osint|passive)\b/i },
+  { key:"scan",   label:"Quét cổng",      kw:/\b(nmap|masscan|rustscan|naabu|port ?scan|-p-|-sV|-sS)\b/i },
+  { key:"enum",   label:"Liệt kê",        kw:/\b(gobuster|ffuf|feroxbuster|dirb|dirbuster|nikto|whatweb|enum4linux|smbclient|smbmap|snmpwalk|wpscan|enumerat|liệt kê|dịch vụ|banner)\b/i },
+  { key:"exploit",label:"Khai thác",      kw:/\b(nuclei|sqlmap|metasploit|msfconsole|exploit|payload|cve-|rce|sqli|xss|lfi|rfi|ssrf|deserial|khai thác)\b/i },
+  { key:"post",   label:"Hậu khai thác",  kw:/\b(privesc|linpeas|winpeas|mimikatz|credential|creds|loot|pivot|persistence|hashdump|\/etc\/shadow|config|shell|hậu khai thác|thu thập)\b/i },
+  { key:"report", label:"Báo cáo",        kw:/\b(report|reporter|báo cáo|summary|tổng hợp|finding list)\b/i },
+];
+const SEV_RULES = [
+  { level:"high", re:/\b(rce|remote code|web ?shell|reverse shell|unauth|unauthenticated|no ?auth|không mật khẩu|không cần xác thực|sql ?inject|sqli|critical|nghiêm trọng|cve-\d{4}-\d+|default cred|hard-?coded|exposed .*(key|secret|password)|leak(ed)? credential|domain admin|root shell)\b/i },
+  { level:"med",  re:/\b(medium|low|info|informational|banner|version disclos|outdated|misconfig|directory listing|verbose error|self-signed|weak cipher|trung bình|thấp)\b/i },
+];
+function classifySeverity(t){ if(!t) return null; for(const r of SEV_RULES) if(r.re.test(t)) return r.level; return null; }
+function detectPhase(t){ if(!t) return -1; let i=-1; PHASES.forEach((p,k)=>{ if(p.kw.test(t)) i=Math.max(i,k); }); return i; }
+
+const MASK="‹che›";
+const REDACT_RULES=[
+  { re:/-----BEGIN [^-\n]*PRIVATE KEY-----[\s\S]*?-----END [^-\n]*PRIVATE KEY-----/g, fn:()=>`-----BEGIN PRIVATE KEY----- ${MASK} -----END PRIVATE KEY-----` },
+  { re:/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, fn:()=>MASK },
+  { re:/\b(Bearer|Basic)\s+[A-Za-z0-9._\-/+=]{8,}/gi, fn:(m,s)=>`${s} ${MASK}` },
+  { re:/\b(authorization|x-cai-api-key)(\s*[:=]\s*)\S+/gi, fn:(m,k,sep)=>`${k}${sep}${MASK}` },
+  { re:/\bAKIA[0-9A-Z]{16}\b/g, fn:()=>MASK },
+  { re:/\b[0-9a-f]{32}:[0-9a-f]{32}\b/gi, fn:()=>MASK },
+  { re:/\b([a-z][a-z0-9+.\-]*:\/\/[^\s:/@]+:)[^\s@]+@/gi, fn:(m,h)=>`${h}${MASK}@` },
+  { re:/\b(api[_-]?key|secret|access[_-]?token|token|password|passwd|pwd)(\s*[:=]\s*)(["']?)([^\s"']{3,})\3/gi, fn:(m,k,sep,q)=>`${k}${sep}${q}${MASK}${q}` },
+  { re:/(--password|--pass)(=|\s+)(\S+)/gi, fn:(m,k,sep)=>`${k}${sep}${MASK}` },
+  { re:/(^|\s)-p(?=\S)(?!\d[\d,\-]*(?:\s|$))\S+/g, fn:(m,pre)=>`${pre}-p${MASK}` },
+];
+function redact(s){ if(s==null) return s; if(!state||!state.redact) return String(s); let o=String(s); for(const r of REDACT_RULES) o=o.replace(r.re,r.fn); return o; }
+
+/* ==========================================================================
+ * State
+ * ========================================================================== */
+const state={
+  running:false, ended:false, errored:false, demo:false, abort:null, sessionId:null,
+  savedAgent:null, savedModel:null, maxPhase:-1, sevHigh:0, sevLow:0,
+  seenFindings:new Set(), findings:[], logLines:0, cotLines:0, autoscroll:true, redact:true,
+  startTime:0, lastFrameTs:0, turns:0, maxTurns:30, clockTimer:null, watchTimer:null,
+  curAgent:"", lastTool:"", filterKinds:null, filterQ:"",
+  ports:0, creds:0, flags:0, tps:0, tokBucket:0, tokTimer:null,
+};
+const LOG_KINDS=["tool","sys","agent","handoff","finding","err"];
+const WATCHDOG_SEC=90;
+
+const $=(id)=>document.getElementById(id);
+const logEl=$("log"), cotEl=$("cot-body");
+function apiBase(){ return ($("in-api").value.trim()).replace(/\/+$/,""); }
+function headers(extra){ const h=Object.assign({"Content-Type":"application/json"},extra||{}); const k=$("in-key").value.trim(); if(k) h["X-CAI-API-Key"]=k; return h; }
+function nowTs(){ const d=new Date(),p=(n)=>String(n).padStart(2,"0"); return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+function truncate(s,n){ s=String(s); return s.length>n? s.slice(0,n)+"…":s; }
+
+/* localStorage cfg */
+const LS_KEY="cai-c2-cfg";
+function saveCfg(){ try{ localStorage.setItem(LS_KEY,JSON.stringify({
+  api:$("in-api").value, agent:$("in-agent").value, model:$("in-model").value,
+  turns:$("in-turns").value, target:$("in-target").value, prompt:$("in-prompt").value, redact:$("chk-redact").checked,
+}));}catch(_){} }
+function loadCfg(){ let c=null; try{ c=JSON.parse(localStorage.getItem(LS_KEY)||"null"); }catch(_){}
+  if(!c) return;
+  if(c.api!=null)$("in-api").value=c.api; if(c.turns)$("in-turns").value=c.turns;
+  if(c.target!=null)$("in-target").value=c.target; if(c.prompt!=null)$("in-prompt").value=c.prompt;
+  if(c.redact===false){ state.redact=false; $("chk-redact").checked=false; $("redact-label").classList.remove("on"); }
+  state.savedAgent=c.agent||null; state.savedModel=c.model||null;
+}
+
+/* ==========================================================================
+ * Text scramble (decipher effect)
+ * ========================================================================== */
+const SCR="0123456789ABCDEF<>/\\_=+*#x";
+function scramble(el, text, dur=320){
+  if(!el) return; const start=performance.now(); const final=String(text);
+  function frame(now){
+    const t=Math.min(1,(now-start)/dur); let out="";
+    for(let i=0;i<final.length;i++){ out+= i < final.length*t ? final[i] : (final[i]===" "?" ":SCR[(Math.random()*SCR.length)|0]); }
+    el.textContent=out;
+    if(t<1) requestAnimationFrame(frame); else el.textContent=final;
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ==========================================================================
+ * Log (Live Terminal)
+ * ========================================================================== */
+function addLog(kind, html, sev){
+  const ln=document.createElement("div");
+  ln.className="ln "+kind+(sev==="high"?" high":sev==="med"?" med":"");
+  ln.innerHTML=`<span class="ts">${nowTs()}</span><span class="msg">${html}</span>`;
+  logEl.appendChild(ln);
+  state.logLines++; $("log-count").textContent=state.logLines+" sự kiện";
+  applyFilterToLine(ln); updateFilterCount();
+  if(state.autoscroll) requestAnimationFrame(()=>{ logEl.scrollTop=logEl.scrollHeight; });
+  return ln;
+}
+function clearLog(){ logEl.innerHTML=""; state.logLines=0; $("log-count").textContent="0 sự kiện"; updateFilterCount(); }
+function lnKind(ln){ for(const k of LOG_KINDS) if(ln.classList.contains(k)) return k; return "sys"; }
+function applyFilterToLine(ln){
+  const kindOk=!state.filterKinds||state.filterKinds.has(lnKind(ln));
+  const q=state.filterQ; const textOk=!q||ln.textContent.toLowerCase().includes(q);
+  const show=kindOk&&textOk; ln.style.display=show?"":"none"; ln.classList.toggle("hl",show&&!!q);
+}
+function applyLogFilter(){ state.filterQ=($("log-search").value||"").trim().toLowerCase(); for(const ln of logEl.children) applyFilterToLine(ln); updateFilterCount(); }
+function updateFilterCount(){ let total=0,shown=0; for(const ln of logEl.children){ total++; if(ln.style.display!=="none") shown++; }
+  const el=$("filter-count"); if(!el) return;
+  const filtering=state.filterQ||(state.filterKinds&&state.filterKinds.size<LOG_KINDS.length);
+  el.textContent=filtering?`${shown}/${total}`:""; }
+
+/* ==========================================================================
+ * CoT stream
+ * ========================================================================== */
+function addCot(tag, text){
+  const empty=cotEl.querySelector(".SYS .cot-tag.SYS"); // bỏ dòng idle đầu
+  if(empty && cotEl.children.length===1 && cotEl.firstChild.textContent.includes("IDLE")) cotEl.innerHTML="";
+  const ln=document.createElement("div"); ln.className="cot-ln "+tag;
+  ln.innerHTML=`<span class="cot-tag ${tag}">${tag}</span><span class="cot-tx">${escapeHtml(truncate(text,260))}</span>`;
+  cotEl.appendChild(ln); state.cotLines++; $("cot-count").textContent=state.cotLines;
+  while(cotEl.children.length>140) cotEl.removeChild(cotEl.firstChild);
+  cotEl.scrollTop=cotEl.scrollHeight;
+}
+
+/* ==========================================================================
+ * Phase rail
+ * ========================================================================== */
+function renderPhases(){
+  const rail=$("phase-rail"); rail.innerHTML="";
+  PHASES.forEach((p,i)=>{
+    let st="pending";
+    if(i<state.maxPhase) st="done";
+    else if(i===state.maxPhase) st=state.running?"running":"done";
+    const el=document.createElement("div"); el.className="ph"; el.dataset.st=st;
+    el.innerHTML=`<div class="bar"></div><div class="nm">${p.label}</div>`;
+    rail.appendChild(el);
+  });
+}
+function bumpPhase(text){ const i=detectPhase(text); if(i>state.maxPhase){ state.maxPhase=i; renderPhases(); swarmPhase(i);} return i; }
+
+/* ==========================================================================
+ * Loot + severity
+ * ========================================================================== */
+function effSev(f){ return f.override||f.sev; }
+function recountSeverity(){ let hi=0,lo=0; for(const f of state.findings){ if(f.fp) continue; if(effSev(f)==="high") hi++; else lo++; }
+  state.sevHigh=hi; state.sevLow=lo; $("loot-vuln").textContent=hi; $("loot-vuln-med").textContent=lo+" med"; }
+function setLoot(){ $("loot-ports").textContent=state.ports; $("loot-creds").textContent=state.creds; $("loot-flags").textContent=state.flags; }
+function redAlert(){ document.body.classList.add("alert"); clearTimeout(state._alertT); state._alertT=setTimeout(()=>document.body.classList.remove("alert"),2200); }
+
+/* findings */
+function sevLabel(s){ return s==="high"?"CAO":s==="med"?"TB":"INFO"; }
+function buildFindingCard(f){
+  const card=document.createElement("div"); card.className="find-card"+(f.fp?" fp":""); card.id="card-"+f.id;
+  const src=[f.agent,f.tool,f.ts].filter(Boolean).join(" · "); const es=effSev(f);
+  card.innerHTML=`<div class="find-top"><span class="sev-badge ${es}">${sevLabel(es)}</span><span class="find-src">${escapeHtml(src)}</span></div>
+    <div class="find-ex">${escapeHtml(redact(f.excerpt))}</div>
+    <div class="find-act">
+      <select data-act="sev" title="Ghi đè mức độ">
+        <option value="">gốc: ${sevLabel(f.sev)}</option>
+        <option value="high"${f.override==="high"?" selected":""}>CAO</option>
+        <option value="med"${f.override==="med"?" selected":""}>TB</option>
+      </select>
+      <button data-act="jump">↪ log</button>
+      <button data-act="fp">${f.fp?"↺ bỏ giả":"✗ giả"}</button>
+    </div>`;
+  return card;
+}
+function renderFindingCard(f){ const list=$("find-list"); const e=list.querySelector(".find-empty"); if(e) e.remove();
+  const ex=$("card-"+f.id); const card=buildFindingCard(f); if(ex) list.replaceChild(card,ex); else list.appendChild(card); }
+function findingById(cid){ return state.findings.find(x=>("card-"+x.id)===cid); }
+function jumpToLog(f){ if(!f.el||!f.el.isConnected){ return; } if(f.el.style.display==="none") f.el.style.display="";
+  f.el.scrollIntoView({block:"center",behavior:"smooth"}); f.el.classList.remove("flash"); void f.el.offsetWidth; f.el.classList.add("flash"); }
+function resetFindings(){ state.findings=[]; const l=$("find-list"); if(l) l.innerHTML='<div class="find-empty">Chưa có phát hiện.</div>'; }
+function registerFinding(level, raw, lnEl){
+  const sig=level+":"+raw.trim().slice(0,120).toLowerCase(); if(state.seenFindings.has(sig)) return; state.seenFindings.add(sig);
+  const f={ id:"f"+(state.findings.length+1), sev:level, override:null, fp:false, sig, excerpt:raw.trim().slice(0,500),
+    agent:state.curAgent||"?", tool:state.lastTool||"", ts:nowTs(), el:lnEl||null };
+  state.findings.push(f); renderFindingCard(f); recountSeverity();
+  if(level==="high"){ redAlert(); addCot("VULN", raw.trim().slice(0,160)); }
+}
+function downloadBlob(text,name,mime){ const b=new Blob([text],{type:mime+";charset=utf-8"}); const u=URL.createObjectURL(b);
+  const a=document.createElement("a"); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(u); }
+function findingsForExport(){ return state.findings.filter(f=>!f.fp); }
+function exportFindingsMd(){ const fs=findingsForExport(); if(!fs.length){ toast("Chưa có phát hiện để xuất."); return; }
+  const target=($("in-target").value||"").trim()||"—"; let md=`# Findings — CAI_LO C2\n\n- Target: ${target}\n- Phiên: ${state.sessionId||"—"}\n- Xuất: ${new Date().toISOString()}\n- ⚠️ Findings là NGHI NGỜ — cần xác minh thủ công.\n\n`;
+  fs.forEach((f,i)=>{ md+=`## ${i+1}. [${sevLabel(effSev(f))}] ${f.tool||f.agent||"finding"}\n\n- Nguồn: ${f.agent} · ${f.tool||"?"} · ${f.ts}\n`;
+    if(f.override) md+=`- Mức gốc ${sevLabel(f.sev)} → ghi đè ${sevLabel(f.override)}\n`; md+=`\n\`\`\`\n${redact(f.excerpt)}\n\`\`\`\n\n`; });
+  downloadBlob(md,`findings_${(state.sessionId||"demo").slice(0,8)}.md`,"text/markdown"); }
+function exportFindingsJson(){ const fs=findingsForExport().map(f=>({ id:f.id, severity:effSev(f), original_severity:f.sev, overridden:!!f.override, agent:f.agent, tool:f.tool, time:f.ts, excerpt:redact(f.excerpt), note:"suspected — needs verification" }));
+  if(!fs.length){ toast("Chưa có phát hiện để xuất."); return; }
+  downloadBlob(JSON.stringify({ target:($("in-target").value||"").trim()||null, session:state.sessionId||null, exported_at:new Date().toISOString(), findings:fs },null,2),`findings_${(state.sessionId||"demo").slice(0,8)}.json`,"application/json"); }
+
+/* ==========================================================================
+ * Swarm Graph (SVG, custom — không cần thư viện)
+ * ========================================================================== */
+const SVG_NS="http://www.w3.org/2000/svg";
+// SVG presentation attributes KHÔNG hiểu var(--x) → map token sang hex
+const SGC={cyan:"#39d6ff",amber:"#ffb340",crimson:"#ff3b47",green:"#3ddc84",violet:"#9b7bff",muted:"#5c6b7e","line-2":"#243244",text:"#c3d0de"};
+function col(c){ const k=String(c).replace(/var\(--|\)/g,""); return SGC[k]||c; }
+const swarm={ svg:null, defs:null, agents:new Map(), tools:new Map(), edges:[], W:1000, H:560,
+  cx:500, cy:250, orch:null, target:null, toolSlot:0 };
+function svgEl(tag,attrs){ const e=document.createElementNS(SVG_NS,tag); for(const k in attrs) e.setAttribute(k,attrs[k]); return e; }
+function initSwarm(){
+  const svg=$("swarm-svg"); swarm.svg=svg; svg.innerHTML="";
+  const defs=svgEl("defs");
+  // glow filter
+  defs.innerHTML=`<filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="3.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <radialGradient id="tg" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffb340" stop-opacity="0.25"/><stop offset="100%" stop-color="#ffb340" stop-opacity="0"/></radialGradient>`;
+  svg.appendChild(defs);
+  swarm.gEdges=svgEl("g"); swarm.gNodes=svgEl("g"); svg.appendChild(swarm.gEdges); svg.appendChild(swarm.gNodes);
+  swarm.agents.clear(); swarm.tools.clear(); swarm.edges=[]; swarm.toolSlot=0;
+  // Orchestrator (center)
+  swarm.orch=makeNode("orchestrator","ORCHESTRATOR","điều phối",swarm.cx,swarm.cy,26,"var(--cyan)");
+  // Target node (right)
+  swarm.target=makeNode("__target__","TARGET",($("in-target").value||"scope"),860,swarm.cy,22,"var(--amber)",true);
+  $("swarm-meta").textContent="orchestrator idle";
+}
+function makeNode(id,label,sub,x,y,r,color,isTarget){
+  color=col(color);
+  const g=svgEl("g",{transform:`translate(${x},${y})`}); g.dataset.id=id; g.dataset.x=x; g.dataset.y=y;
+  if(isTarget){ g.appendChild(svgEl("circle",{r:r+16,fill:"url(#tg)"})); }
+  const ring=svgEl("circle",{r,fill:"#0a0e15",stroke:color,"stroke-width":"1.6",filter:"url(#glow)"});
+  const pulse=svgEl("circle",{r,fill:"none",stroke:color,"stroke-width":"1.2",opacity:"0"});
+  const label1=svgEl("text",{class:"node-label","text-anchor":"middle",y:r+14}); label1.textContent=label;
+  const label2=svgEl("text",{class:"node-sub","text-anchor":"middle",y:r+25}); label2.textContent=truncate(sub,22);
+  const icon=svgEl("text",{"text-anchor":"middle",y:"4","font-size":"13",fill:color,"font-weight":"700"});
+  icon.textContent=isTarget?"◎":(id==="orchestrator"?"❖":"◆");
+  g.appendChild(ring); g.appendChild(pulse); g.appendChild(icon); g.appendChild(label1); g.appendChild(label2);
+  swarm.gNodes.appendChild(g);
+  const node={ id,g,ring,pulse,icon,label2,color,x,y,r };
+  g._node=node; return node;
+}
+function setNodeState(node,st){ // thinking|tool|vuln|done|idle
+  if(!node) return; node.st=st; const map={ thinking:SGC.amber, tool:SGC.cyan, vuln:SGC.crimson, done:SGC.green, idle:SGC.muted };
+  const c=map[st]||node.color; node.ring.setAttribute("stroke",c); node.icon.setAttribute("fill",c);
+  node.pulse.setAttribute("stroke",c);
+  node.pulse.style.animation="none"; void node.pulse.getBBox();
+  if(st==="thinking"||st==="tool"||st==="vuln"){ animatePulse(node); }
+}
+function setNodeBase(node){ if(!node) return; node.st="base"; node.ring.setAttribute("stroke",node.color); node.icon.setAttribute("fill",node.color);
+  if(node._pt){ cancelAnimationFrame(node._pt); node._pt=null; } node.pulse.setAttribute("opacity","0"); }
+function animatePulse(node){ let t=0; const base=node.r;
+  if(node._pt) cancelAnimationFrame(node._pt);
+  (function f(){ t+=0.05; const o=(Math.sin(t)*0.5+0.5); node.pulse.setAttribute("r",base+6+o*8); node.pulse.setAttribute("opacity",(0.5-o*0.45).toFixed(2));
+    node._pt=requestAnimationFrame(f); })();
+}
+function agentAngleSlot(i){ // vị trí agent quanh orchestrator (nửa trái)
+  const slots=[[-150,-150],[-200,0],[-150,150],[-40,-190],[-40,190],[60,-150],[60,150]];
+  const s=slots[i%slots.length]; return [swarm.cx+s[0], swarm.cy+s[1]];
+}
+function ensureAgent(name){
+  if(!name) name="agent"; if(swarm.agents.has(name)) return swarm.agents.get(name);
+  const i=swarm.agents.size; const [x,y]=agentAngleSlot(i);
+  const n=makeNode("ag:"+name,name.toUpperCase().slice(0,14),"agent",x,y,19,"var(--violet)");
+  swarm.agents.set(name,n); addEdge(swarm.orch,n,"var(--violet)",false); return n;
+}
+function ensureTool(tool){
+  if(!tool) tool="tool"; const key="tl:"+tool; if(swarm.tools.has(key)){ return swarm.tools.get(key); }
+  // giới hạn số node tool, tái dùng theo vòng
+  if(swarm.tools.size>=6){ const firstKey=swarm.tools.keys().next().value; const old=swarm.tools.get(firstKey); swarm.tools.delete(firstKey); old.g.remove(); swarm.edges=swarm.edges.filter(e=>{ if(e.to===old||e.from===old){ e.path.remove(); return false;} return true;}); }
+  const TSLOTS=[[640,150],[775,185],[665,345],[790,370],[600,255],[720,475]];
+  const i=swarm.toolSlot++ % TSLOTS.length; const [x,y]=TSLOTS[i];
+  const n=makeNode(key,tool.toUpperCase().slice(0,12),"tool",x,y,15,"var(--cyan)");
+  swarm.tools.set(key,n); return n;
+}
+function addEdge(from,to,color,animated){ if(!from||!to) return; color=col(color);
+  const path=svgEl("path",{fill:"none",stroke:color,"stroke-width":"1.3",opacity:"0.5"});
+  swarm.gEdges.appendChild(path); const e={from,to,path,color,animated:!!animated,dash:0}; swarm.edges.push(e); updateEdge(e);
+  if(animated){ path.setAttribute("stroke-dasharray","5 6"); e._anim=true; } return e; }
+function updateEdge(e){ const a=e.from,b=e.to; const mx=(a.x+b.x)/2, my=(a.y+b.y)/2 - 24;
+  e.path.setAttribute("d",`M ${a.x} ${a.y} Q ${mx} ${my} ${b.x} ${b.y}`); }
+function flowEdge(from,to){ if(!from||!to) return; let e=swarm.edges.find(x=>x.from===from&&x.to===to);
+  if(!e) e=addEdge(from,to,SGC.cyan,true); e._anim=true; e.path.setAttribute("stroke",SGC.cyan); e.path.setAttribute("opacity","0.9");
+  e.path.setAttribute("stroke-dasharray","5 6"); clearTimeout(e._t); e._t=setTimeout(()=>{ e._anim=false; e.path.setAttribute("opacity","0.4"); e.path.setAttribute("stroke-dasharray",""); },4000); }
+function swarmTick(){ for(const e of swarm.edges){ if(e._anim){ e.dash-=0.6; e.path.setAttribute("stroke-dashoffset",e.dash); } } requestAnimationFrame(swarmTick); }
+function swarmPhase(i){ if(i>=3){ // exploit+ → đường orchestrator↔target sáng
+    let e=swarm.edges.find(x=>x.from===swarm.orch&&x.to===swarm.target); if(!e) e=addEdge(swarm.orch,swarm.target,SGC.amber,true);
+    e._anim=true; e.path.setAttribute("stroke",SGC.amber); e.path.setAttribute("opacity","0.9"); }
+}
+function swarmAgent(name){
+  if(/orchestrat/i.test(name||"")){ // orchestrator = hub trung tâm, không tạo node trùng
+    swarm.activeAgent=swarm.orch; for(const [,a] of swarm.agents) setNodeState(a,"idle"); setNodeState(swarm.orch,"thinking");
+    $("swarm-meta").textContent="orchestrator · active"; return swarm.orch; }
+  const n=ensureAgent(name); swarm.activeAgent=n; // mọi agent khác về idle, agent hiện tại thinking
+  for(const [,a] of swarm.agents) setNodeState(a,"idle"); setNodeBase(swarm.orch); setNodeState(n,"thinking");
+  flowEdge(swarm.orch,n); $("swarm-meta").textContent=name+" · active";
+  if(!swarm.edges.find(x=>x.from===n&&x.to===swarm.target)) addEdge(n,swarm.target,"var(--line-2)",false);
+  return n; }
+function swarmTool(tool){ const t=ensureTool(tool); const a=swarm.activeAgent||swarm.orch;
+  setNodeState(t,"tool"); flowEdge(a,t); flowEdge(t,swarm.target); clearTimeout(t._rt); t._rt=setTimeout(()=>setNodeState(t,"idle"),3500); }
+function swarmVuln(){ setNodeState(swarm.target,"vuln"); }
+
+/* ==========================================================================
+ * Timers / telemetry
+ * ========================================================================== */
+function fmtElapsed(ms){ const s=Math.floor(ms/1000),m=Math.floor(s/60),r=s%60,p=(n)=>String(n).padStart(2,"0");
+  return m>=60?`${Math.floor(m/60)}:${p(m%60)}:${p(r)}`:`${p(m)}:${p(r)}`; }
+function updateClock(){ if(!state.startTime) return; $("t-clock").textContent=fmtElapsed(Date.now()-state.startTime); }
+function renderTurns(){ const el=$("t-turns"); el.textContent=`${state.turns}/${state.maxTurns}`; el.classList.toggle("over",state.turns>=state.maxTurns); }
+function bumpTurn(){ state.turns++; renderTurns(); }
+function noteFrame(){ state.lastFrameTs=Date.now(); const w=$("watchdog"); if(!w.classList.contains("hide")){ w.classList.add("hide"); w.classList.remove("stall"); } }
+function checkWatchdog(){ if(!state.running||!state.lastFrameTs) return; const idle=Math.floor((Date.now()-state.lastFrameTs)/1000); const w=$("watchdog");
+  if(idle>=WATCHDOG_SEC){ w.classList.remove("hide"); w.classList.toggle("stall",idle>=WATCHDOG_SEC*2); w.textContent=`⚠ im lặng ${idle}s`; } }
+function startRunTimers(){ state.startTime=Date.now(); state.lastFrameTs=Date.now(); state.turns=0; state.maxTurns=parseInt($("in-turns").value,10)||30;
+  updateClock(); renderTurns(); $("watchdog").classList.add("hide");
+  clearInterval(state.clockTimer); clearInterval(state.watchTimer);
+  state.clockTimer=setInterval(updateClock,1000); state.watchTimer=setInterval(checkWatchdog,3000);
+  clearInterval(state.tokTimer); state.tokTimer=setInterval(()=>{ state.tps=state.tokBucket; state.tokBucket=0; $("t-tps").textContent=state.tps; },1000); }
+function stopRunTimers(){ clearInterval(state.clockTimer); clearInterval(state.watchTimer); clearInterval(state.tokTimer);
+  state.clockTimer=state.watchTimer=state.tokTimer=null; updateClock(); $("watchdog").classList.add("hide"); $("t-tps").textContent="0"; }
+function feedTokens(text){ state.tokBucket += Math.max(1,Math.round((text||"").length/4)); }
+
+/* ==========================================================================
+ * Status + toast
+ * ========================================================================== */
+function setStatus(txt){ $("status-text").innerHTML=`<span class="caret">❯</span> ${escapeHtml(truncate(txt,120))}`; }
+let toastT=null;
+function toast(msg){ let el=$("__toast"); if(!el){ el=document.createElement("div"); el.id="__toast";
+  el.style.cssText="position:fixed;left:50%;bottom:64px;transform:translateX(-50%);z-index:300;background:var(--panel);border:1px solid var(--cyan-dim);color:var(--cyan);padding:8px 16px;font-size:12px;box-shadow:var(--glow-cyan)"; document.body.appendChild(el); }
+  el.textContent=msg; el.style.display="block"; clearTimeout(toastT); toastT=setTimeout(()=>el.style.display="none",2200); }
+
+/* ==========================================================================
+ * Core: xử lý 1 reasoning_step (GIỮ NGUYÊN type/field với backend)
+ * ========================================================================== */
+function handleStep(step){
+  const t=step.type;
+  if(t==="agent_switched"){
+    state.curAgent=step.agent||state.curAgent; scramble($("target-label"),($("in-target").value||"—"));
+    addLog("agent",`→ agent: <b>${escapeHtml(step.agent||"?")}</b>`); addCot("THOUGHT",`Chuyển quyền điều khiển cho agent: ${step.agent||"?"}`);
+    bumpPhase(step.agent||""); swarmAgent(step.agent||"agent");
+  } else if(t==="handoff"){
+    addLog("handoff",`handoff: ${escapeHtml(step.from_agent||"?")} → ${escapeHtml(step.to_agent||"?")}`);
+    addCot("PLAN",`Handoff ${step.from_agent||"?"} → ${step.to_agent||"?"}`);
+    bumpPhase((step.to_agent||"")+" "+(step.from_agent||"")); swarmAgent(step.to_agent||"agent");
+  } else if(t==="tool_call"){
+    let args=step.arguments; try{ if(typeof args==="string") args=JSON.parse(args); }catch(_){}
+    let argStr=""; if(args&&typeof args==="object") argStr=Object.entries(args).map(([k,v])=>`${k}=${typeof v==="object"?JSON.stringify(v):v}`).join(" "); else argStr=String(step.arguments||"");
+    state.lastTool=step.tool||state.lastTool; bumpPhase(step.tool||""); bumpTurn();
+    const argDisp=redact(argStr);
+    addLog("tool",`<span class="arrow">❯ ${escapeHtml(step.tool||"tool")}</span> <span style="color:#7f93a8">${escapeHtml(argDisp)}</span>`);
+    addCot("ACTION",`${step.tool||"tool"} ${argDisp}`); setStatus(`${step.tool||"tool"} ${argDisp}`); swarmTool(step.tool||"tool"); feedTokens(argStr);
+  } else if(t==="tool_output"){
+    const rawOut=step.output!=null?String(step.output):""; const level=classifySeverity(rawOut); const outDisp=redact(rawOut);
+    feedTokens(rawOut); harvestLoot(rawOut);
+    const kind=level?"finding":"sys"; const tag=level==="high"?` <span class="tag">[CAO]</span>`:level==="med"?` <span class="tag">[TB]</span>`:"";
+    let ln;
+    if(outDisp.length<=120&&!outDisp.includes("\n")){ ln=addLog(kind,escapeHtml(outDisp)+tag,level); addCot("OBSERVE",outDisp); }
+    else{ const lines=outDisp.split("\n").length;
+      ln=addLog(kind,`<details class="tool-out-details" open><summary class="tool-out-summary"><span class="arrow">↳</span> Kết quả (${lines} dòng)${tag}</summary><pre class="pre-block">${escapeHtml(outDisp)}</pre></details>`,level);
+      addCot("OBSERVE",`Nhận ${lines} dòng từ ${state.lastTool||"tool"}`); }
+    if(level) registerFinding(level,rawOut,ln);
+  } else if(t==="message"){
+    const txt=(step.text||"").trim(); if(!txt) return; bumpPhase(txt); feedTokens(txt);
+    const level=classifySeverity(txt); const tag=level==="high"?` <span class="tag">[CAO]</span>`:level==="med"?` <span class="tag">[TB]</span>`:"";
+    const txtDisp=redact(txt); setStatus(txtDisp.replace(/\s+/g," "));
+    const ln=addLog(level?"finding":"agent",`<div class="agent-msg">${escapeHtml(txtDisp)}</div>`+tag,level);
+    addCot(level?"VULN":"THOUGHT",txtDisp);
+    if(level) registerFinding(level,txt,ln);
+  } else if(t==="autonomy_checkpoint"){
+    const pIdx=PHASES.findIndex(p=>p.key===step.phase); if(pIdx>=0&&pIdx>state.maxPhase){ state.maxPhase=pIdx; renderPhases(); swarmPhase(pIdx); }
+    $("t-cycle").textContent=`${step.cycle||1}/${step.max_cycles||6}`;
+    if(step.ports&&step.ports.length){ state.ports=Math.max(state.ports,step.ports.length); setLoot(); }
+    if(step.flags&&step.flags.length){ state.flags=Math.max(state.flags,step.flags.length); setLoot(); redAlert(); swarmVuln(); }
+    const portsInfo=(step.ports&&step.ports.length)?` · cổng: ${escapeHtml(step.ports.join(", "))}`:"";
+    const flagsInfo=(step.flags&&step.flags.length)?` · 🚩 ${escapeHtml(step.flags.join(", "))}`:"";
+    addLog("sys",`<b style="color:var(--green)">🔄 [Loop ${step.cycle||1}/${step.max_cycles||6} · lượt ${step.turns_used||0}/${step.max_turns||30}]</b> ${escapeHtml(step.phase_label||step.phase||"")}${portsInfo}${flagsInfo} <span style="color:var(--muted)">↳ ${escapeHtml(step.reason||"")}</span>`);
+    addCot("PLAN",`[Vòng ${step.cycle}/${step.max_cycles}] ${step.phase_label||step.phase||""} — ${step.reason||""}`);
+    setStatus(`[Vòng ${step.cycle}/${step.max_cycles}] ${step.reason||step.phase_label||""}`);
+  } else if(step&&step.raw!=null){ addLog("sys","· khung SSE không đọc được");
+  } else if(t){ addLog("sys",escapeHtml(String(t))); }
+}
+function handleFinal(data){
+  state.maxPhase=PHASES.length-1; renderPhases();
+  for(const [,a] of swarm.agents) setNodeState(a,"done"); setNodeState(swarm.orch,"done");
+  const finalMsg=(data&&data.final_message)||""; const finalOut=data&&data.final_output; let body="";
+  if(finalMsg) body=`<pre class="final-content">${escapeHtml(redact(finalMsg))}</pre>`;
+  else if(finalOut){ const s=typeof finalOut==="string"?finalOut:JSON.stringify(finalOut,null,2); body=`<pre class="final-content">${escapeHtml(redact(s))}</pre>`; }
+  if(body) addLog("agent",`<div class="final-report"><div class="final-title">✓ Báo cáo kết quả hoàn tất:</div>${body}</div>`,"high");
+  else addLog("sys","<b>Hoàn tất.</b>");
+  addCot("PLAN","Phiên hoàn tất — tổng hợp báo cáo.");
+  markEnded();
+}
+
+/* trích "loot" (port/cred đếm nhanh) từ output để đổ lên HUD */
+function harvestLoot(text){
+  const portm=text.match(/\b\d{1,5}\/(tcp|udp)\s+open\b/gi); if(portm){ state.ports=Math.max(state.ports, new Set(portm.map(x=>x.toLowerCase())).size); }
+  const credm=text.match(/\b(password|passwd|pwd|cred|secret|api[_-]?key|token)\b\s*[:=]/gi); if(credm){ state.creds+=0; /* đếm bảo thủ: để memory/summary chính xác hơn */ }
+  const flagm=text.match(/\b(flag|HTB|FLAG)\{[^}]+\}/g); if(flagm){ state.flags=Math.max(state.flags,flagm.length); redAlert(); swarmVuln(); }
+  setLoot();
+}
+
+/* ==========================================================================
+ * SSE qua fetch (POST) — GIỮ NGUYÊN parser
+ * ========================================================================== */
+async function api(path,opts){ const res=await fetch(apiBase()+path,opts);
+  if(!res.ok){ const txt=await res.text().catch(()=> ""); throw new Error(`HTTP ${res.status} ${path} — ${truncate(txt,160)}`); } return res; }
+function setConn(kind,text){ const el=$("conn"); el.className="conn "+(kind||""); $("conn-text").textContent=text; }
+async function readSSE(resp){
+  const reader=resp.body.getReader(); const dec=new TextDecoder(); let buf="";
+  while(true){ const {value,done}=await reader.read(); if(done) break; buf+=dec.decode(value,{stream:true});
+    let sep; while((sep=buf.indexOf("\n\n"))>=0){ const frame=buf.slice(0,sep); buf=buf.slice(sep+2);
+      let ev="message",dl=[]; for(const line of frame.split("\n")){ if(line.startsWith("event:")) ev=line.slice(6).trim(); else if(line.startsWith("data:")) dl.push(line.slice(5).trim()); }
+      if(!dl.length) continue; let data; try{ data=JSON.parse(dl.join("\n")); }catch(_){ data={raw:dl.join("\n")}; }
+      noteFrame();
+      if(ev==="reasoning_step") handleStep(data);
+      else if(ev==="final"){ handleFinal(data); try{ await reader.cancel(); }catch(_){}
+        return; }
+      else if(ev==="error"){ state.errored=true; $("live-dot").className="live-dot err"; addLog("err","lỗi: "+escapeHtml(data.message||JSON.stringify(data))); }
+      else handleStep(data);
+    }
+  }
+}
+
+/* ==========================================================================
+ * Agents / models
+ * ========================================================================== */
+async function loadAgents(){ try{ const res=await api("/api/v1/agents",{headers:headers()}); const data=await res.json();
+    const sel=$("in-agent"); while(sel.options.length>1) sel.remove(1);
+    (data.agents||[]).forEach(a=>{ const o=document.createElement("option"); o.value=a.key||a.name; o.textContent=a.name+(a.type==="pattern"?" (pattern)":""); sel.appendChild(o); });
+    if(state.savedAgent) sel.value=state.savedAgent; setConn("ok",`đã kết nối · ${(data.agents||[]).length} agent`);
+  }catch(e){ setConn("bad","chưa kết nối API: "+e.message); } }
+let ALL_MODELS=[];
+async function loadModels(){ if(state.savedModel!=null&&!$("in-model").value) $("in-model").value=state.savedModel;
+  try{ const res=await api("/api/v1/models",{headers:headers()}); const data=await res.json();
+    ALL_MODELS=(data.models||[]).filter(m=>m.name).map(m=>({name:m.name,prov:[m.provider,m.category].filter(Boolean).join(" · ")})).sort((a,b)=>a.prov.localeCompare(b.prov)||a.name.localeCompare(b.name));
+  }catch(_){ ALL_MODELS=[]; } }
+const MODEL_CAP=300; let comboItems=[],comboActive=-1;
+function comboFilter(q){ q=(q||"").trim().toLowerCase(); if(!q) return ALL_MODELS; return ALL_MODELS.filter(m=>m.name.toLowerCase().includes(q)||m.prov.toLowerCase().includes(q)); }
+function comboRender(){ const panel=$("model-panel"); const list=comboFilter($("in-model").value); comboItems=list.slice(0,MODEL_CAP); comboActive=-1;
+  const more=list.length>MODEL_CAP?` · ${MODEL_CAP} đầu, gõ để lọc`:""; let html=`<div class="combo-count">${list.length} model${more}</div>`;
+  if(!comboItems.length) html+=`<div class="combo-empty">Không có gợi ý — vẫn gõ tự do rồi chạy.</div>`;
+  else html+=comboItems.map((m,i)=>`<div class="combo-item" data-i="${i}"><span class="ci-name">${escapeHtml(m.name)}</span><span class="ci-prov">${escapeHtml(m.prov)}</span></div>`).join("");
+  panel.innerHTML=html; panel.hidden=false; }
+function comboHide(){ $("model-panel").hidden=true; comboActive=-1; }
+function comboPick(i){ if(i<0||i>=comboItems.length) return; $("in-model").value=comboItems[i].name; saveCfg(); comboHide(); }
+function comboSetActive(i){ const els=$("model-panel").querySelectorAll(".combo-item"); els.forEach(e=>e.classList.remove("active")); if(i>=0&&els[i]){ els[i].classList.add("active"); els[i].scrollIntoView({block:"nearest"}); } comboActive=i; }
+function setupModelCombo(){ const inp=$("in-model"),panel=$("model-panel");
+  inp.addEventListener("focus",comboRender); inp.addEventListener("input",comboRender);
+  inp.addEventListener("keydown",(e)=>{ if(panel.hidden) return;
+    if(e.key==="ArrowDown"){ e.preventDefault(); comboSetActive(Math.min(comboActive+1,comboItems.length-1)); }
+    else if(e.key==="ArrowUp"){ e.preventDefault(); comboSetActive(Math.max(comboActive-1,0)); }
+    else if(e.key==="Enter"&&comboActive>=0){ e.preventDefault(); comboPick(comboActive); }
+    else if(e.key==="Escape"){ e.preventDefault(); e.stopPropagation(); comboHide(); } });
+  inp.addEventListener("blur",()=>setTimeout(comboHide,150));
+  panel.addEventListener("mousedown",(e)=>{ const it=e.target.closest(".combo-item"); if(it){ e.preventDefault(); comboPick(parseInt(it.dataset.i,10)); } }); }
+
+/* ==========================================================================
+ * Run control
+ * ========================================================================== */
+function resetRun(){ state.ended=false; state.errored=false; state.maxPhase=-1; state.sevHigh=0; state.sevLow=0;
+  state.seenFindings.clear(); resetFindings(); state.curAgent=""; state.lastTool=""; state.ports=0; state.creds=0; state.flags=0;
+  setLoot(); recountSeverity(); initSwarm(); renderPhases(); }
+async function start(){
+  if(state.running) return; const prompt=$("in-prompt").value.trim(); const target=$("in-target").value.trim();
+  if(!prompt){ $("in-prompt").focus(); toast("Nhập nhiệm vụ trước."); return; }
+  state.running=true; state.demo=false; $("demo-pill").textContent="";
+  resetRun(); startRunTimers();
+  scramble($("target-label"),target||"—"); $("live-dot").className="live-dot live";
+  $("btn-start").disabled=true; $("btn-stop").disabled=false; setStatus("Khởi tạo phiên…"); renderPhases();
+  state.abort=new AbortController();
+  try{
+    const agent=$("in-agent").value||undefined; const model=$("in-model").value||undefined;
+    const cs=await api("/api/v1/sessions",{ method:"POST", headers:headers(), body:JSON.stringify({ agent, model, stateful:true, metadata:{ target:target||null, ui:"cai-c2" } }), signal:state.abort.signal });
+    const session=await cs.json(); state.sessionId=session.id;
+    addLog("sys",`phiên: <b>${escapeHtml(session.id)}</b> · agent: ${escapeHtml(session.agent||"?")} · model: ${escapeHtml(session.model||"?")}`);
+    $("swarm-meta").textContent=(session.agent||"agent")+" · ready";
+    const turns=parseInt($("in-turns").value,10)||30; const autonomyOn=$("in-autonomy")?$("in-autonomy").checked:true;
+    const composed=target?`${prompt}\n\n[Target / scope: ${target}]`:prompt;
+    const stream=await api(`/api/v1/sessions/${encodeURIComponent(session.id)}/messages/stream`,{ method:"POST", headers:headers({"Accept":"text/event-stream"}),
+      body:JSON.stringify({ input:composed, max_turns:turns, context:{ target:target||null, autonomy:autonomyOn } }), signal:state.abort.signal });
+    await readSSE(stream);
+  }catch(e){ if(e.name==="AbortError") addLog("sys","đã dừng bởi người dùng.");
+    else{ state.errored=true; const msg=/Failed to fetch|NetworkError|ERR_/i.test(e.message||"")?"Không kết nối được backend (kiểm tra server / API base).":e.message; addLog("err","lỗi: "+escapeHtml(msg)); setStatus("Lỗi: "+msg); }
+  }finally{ markEnded(); }
+}
+function markEnded(){ if(state.ended) return; state.ended=true; state.running=false; stopRunTimers();
+  $("live-dot").className=state.errored?"live-dot err":"live-dot done"; $("btn-start").disabled=false; $("btn-stop").disabled=true; renderPhases();
+  if($("status-text").textContent.includes("Khởi tạo")) setStatus("Kết thúc."); }
+async function stop(){ if(state._demoStop){ state._demoStop(); return; } if(state.abort) state.abort.abort();
+  if(state.sessionId){ try{ await api(`/api/v1/sessions/${encodeURIComponent(state.sessionId)}/interrupt`,{method:"POST",headers:headers()}); }catch(_){} } }
+
+/* ==========================================================================
+ * DEMO MODE — mô phỏng 1 phiên pentest lab (offline, không cần backend)
+ * Dữ liệu là LAB GIẢ LẬP để trình diễn UI; không phải hướng dẫn tấn công.
+ * ========================================================================== */
+const DEMO_SCRIPT=[
+  { d:400, ev:"reasoning_step", type:"agent_switched", agent:"orchestrator" },
+  { d:500, ev:"reasoning_step", type:"message", text:"Nhận mục tiêu demo.lab (10.10.11.24). Lập kế hoạch: recon → quét cổng → liệt kê web → thử điểm yếu → báo cáo." },
+  { d:500, ev:"reasoning_step", type:"handoff", from_agent:"orchestrator", to_agent:"recon_agent" },
+  { d:400, ev:"reasoning_step", type:"tool_call", tool:"nmap", arguments:{target:"10.10.11.24", flags:"-sV -p-"} },
+  { d:1100, ev:"reasoning_step", type:"tool_output", output:"Starting Nmap scan...\n22/tcp  open  ssh      OpenSSH 8.2p1\n80/tcp  open  http     nginx 1.18.0\n3306/tcp open mysql   MySQL 8.0 (demo)\n8080/tcp open  http-proxy  Werkzeug/2.0 (demo app)" },
+  { d:500, ev:"reasoning_step", type:"autonomy_checkpoint", cycle:1, max_cycles:6, turns_used:1, max_turns:30, phase:"scan", phase_label:"Quét cổng", reason:"4 cổng mở, ưu tiên web 80/8080", ports:["22","80","3306","8080"] },
+  { d:500, ev:"reasoning_step", type:"handoff", from_agent:"recon_agent", to_agent:"web_pentester" },
+  { d:400, ev:"reasoning_step", type:"tool_call", tool:"whatweb", arguments:{url:"http://10.10.11.24"} },
+  { d:900, ev:"reasoning_step", type:"tool_output", output:"nginx[1.18.0], Country[DEMO], HTTPServer[nginx/1.18.0], Title[Demo Corp Portal]" },
+  { d:400, ev:"reasoning_step", type:"tool_call", tool:"ffuf", arguments:{url:"http://10.10.11.24/FUZZ", wordlist:"common.txt"} },
+  { d:1200, ev:"reasoning_step", type:"tool_output", output:"/admin        [Status: 301]\n/login        [Status: 200]\n/api          [Status: 200]\n/backup       [Status: 403]\n/.git         [Status: 200]  <-- directory listing" },
+  { d:500, ev:"reasoning_step", type:"message", text:"Phát hiện /.git để lộ (directory listing) và form /login — misconfig mức trung bình, tiếp tục kiểm tra tham số." },
+  { d:500, ev:"reasoning_step", type:"autonomy_checkpoint", cycle:2, max_cycles:6, turns_used:3, max_turns:30, phase:"enum", phase_label:"Liệt kê", reason:"Có bề mặt web, dò tham số login", ports:["22","80","3306","8080"] },
+  { d:400, ev:"reasoning_step", type:"tool_call", tool:"sqlmap", arguments:{url:"http://10.10.11.24/login", data:"user=*&pass=*", batch:true} },
+  { d:1400, ev:"reasoning_step", type:"tool_output", output:"Parameter 'user' appears to be injectable (sqli).\nback-end DBMS: MySQL >= 8.0\n[CRITICAL] SQL injection xác nhận trên tham số 'user' — unauthenticated." },
+  { d:600, ev:"reasoning_step", type:"message", text:"SQL injection nghiêm trọng, không cần xác thực. Trích thông tin tài khoản demo." },
+  { d:900, ev:"reasoning_step", type:"tool_output", output:"Database: demo_corp\nTable: users\nadmin : password=‹demo-hash›\nguest : password=‹demo-hash›" },
+  { d:500, ev:"reasoning_step", type:"handoff", from_agent:"web_pentester", to_agent:"post_exploit" },
+  { d:500, ev:"reasoning_step", type: "tool_call", tool:"linpeas", arguments:{host:"10.10.11.24"} },
+  { d:1200, ev:"reasoning_step", type:"tool_output", output:"[+] Sudo version 1.8.31 (demo)\n[+] Writable cron script /opt/demo/backup.sh\n[+] Potential privesc vector (demo lab)" },
+  { d:600, ev:"reasoning_step", type:"message", text:"Thu được shell demo + đọc được flag lab." },
+  { d:600, ev:"reasoning_step", type:"autonomy_checkpoint", cycle:4, max_cycles:6, turns_used:6, max_turns:30, phase:"post", phase_label:"Hậu khai thác", reason:"Chiếm được quyền trên host demo", ports:["22","80","3306","8080"], flags:["HTB{demo_flag_khong_that}"] },
+  { d:500, ev:"reasoning_step", type:"handoff", from_agent:"post_exploit", to_agent:"reporter" },
+  { d:500, ev:"reasoning_step", type:"message", text:"Tổng hợp báo cáo: 1 lỗ hổng CAO (SQLi), 2 misconfig TB (.git lộ, directory listing), 4 cổng mở, 1 flag." },
+  { d:700, ev:"final", final_message:"BÁO CÁO DEMO — demo.lab (10.10.11.24)\n\n[CAO] SQL Injection không xác thực tại /login (tham số user) → truy cập CSDL demo_corp.\n[TB]  /.git để lộ mã nguồn (directory listing).\n[TB]  Thiếu rate-limit trên /login.\n\nCổng mở: 22, 80, 3306, 8080.\nFlag (lab): HTB{demo_flag_khong_that}\n\n⚠️ Đây là phiên DEMO với dữ liệu lab mô phỏng — không phải mục tiêu thật." },
+];
+let demoTimer=null;
+function runDemo(){
+  if(state.running) return;
+  state.running=true; state.demo=true; $("demo-pill").textContent="◈ DEMO"; $("demo-flag").classList.add("show");
+  if(!$("in-target").value.trim()) $("in-target").value="10.10.11.24";
+  if(!$("in-prompt").value.trim()) $("in-prompt").value="Trinh sát và kiểm thử demo.lab, tìm điểm yếu web, báo cáo.";
+  resetRun(); startRunTimers(); state.sessionId="demo-"+Date.now().toString(36);
+  scramble($("target-label"),$("in-target").value); $("live-dot").className="live-dot live";
+  $("btn-start").disabled=true; $("btn-stop").disabled=false; setStatus("DEMO: khởi tạo phiên mô phỏng…");
+  // demo memory
+  demoMem={ stats:{hosts:1,ports:4,credentials:2,findings:3},
+    ports:[{host:"10.10.11.24",port:22,proto:"tcp",service:"ssh",version:"OpenSSH 8.2"},{host:"10.10.11.24",port:80,proto:"tcp",service:"http",version:"nginx 1.18"},{host:"10.10.11.24",port:3306,proto:"tcp",service:"mysql",version:"8.0"},{host:"10.10.11.24",port:8080,proto:"tcp",service:"http",version:"werkzeug"}],
+    endpoints:[{url:"http://10.10.11.24/login",status_code:200},{url:"http://10.10.11.24/.git/",status_code:200},{url:"http://10.10.11.24/admin",status_code:301}],
+    credentials:[{secret_type:"db",username:"admin",secret:"‹demo›"},{secret_type:"flag",username:"",secret:"HTB{demo_flag_khong_that}"}],
+    findings:[{severity:"high",title:"SQLi không xác thực /login"},{severity:"med",title:".git để lộ"},{severity:"med",title:"Thiếu rate-limit login"}] };
+  let i=0, stopped=false;
+  state._demoStop=()=>{ stopped=true; clearTimeout(demoTimer); addLog("sys","DEMO: đã dừng."); markEndedDemo(); };
+  function step(){
+    if(stopped||i>=DEMO_SCRIPT.length){ return; }
+    const s=DEMO_SCRIPT[i++]; noteFrame();
+    if(s.ev==="final"){ handleFinal(s); markEndedDemo(); return; }
+    const {d,ev,...data}=s; handleStep(data);
+    demoTimer=setTimeout(step, s.d||600);
+  }
+  demoTimer=setTimeout(step, 400);
+  // memory panel refresh dùng demoMem
+  renderMem(demoMem);
+}
+function markEndedDemo(){ state.running=false; state.ended=true; stopRunTimers(); $("live-dot").className="live-dot done";
+  $("btn-start").disabled=false; $("btn-stop").disabled=true; state._demoStop=null; $("demo-flag").classList.remove("show"); setStatus("DEMO hoàn tất. Bấm ◈ Demo để chạy lại, hoặc Khởi chạy phiên thật."); }
+let demoMem=null;
+
+/* ==========================================================================
+ * Kali Reverse Runner status
+ * ========================================================================== */
+async function checkRunnerStatus(){ if(state.demo) return;
+  try{ const res=await api("/api/v1/runner/status",{headers:headers()}); if(!res.ok) return; const data=await res.json();
+    const dot=$("runner-dot"),badge=$("runner-badge"),details=$("runner-details");
+    if(data.active&&data.runners&&data.runners.length){ const r=data.runners[0];
+      dot.style.background="var(--green)"; badge.style.color="var(--green)"; badge.style.borderColor="#1f6f47"; badge.textContent="Kali: Online ("+(r.transport||"http").toUpperCase()+")";
+      details.textContent=`${r.hostname} (${r.ip}) · ${r.tools?r.tools.length:0} tool · ${r.os||"Kali"}`;
+    } else { dot.style.background="var(--muted)"; badge.style.color="var(--muted)"; badge.textContent="Kali: Offline"; details.textContent="Chưa kết nối máy ảo Kali — lệnh chạy cục bộ."; }
+  }catch(_){ }
+}
+
+/* ==========================================================================
+ * Campaign memory (SQLite) loader
+ * ========================================================================== */
+function renderMem(data){
+  const st=data.stats||{}; $("mem-stats").innerHTML=`<b>${st.hosts||0}</b> host · <b>${st.ports||0}</b> cổng · <b>${st.credentials||0}</b> cred · <b>${st.findings||0}</b> vuln`;
+  const sec=[];
+  if(data.ports&&data.ports.length) sec.push(`<div class="mem-sec p">[Cổng &amp; dịch vụ]</div>`+data.ports.slice(0,12).map(p=>`<div class="mem-row">• ${escapeHtml(p.host)}:${p.port}/${escapeHtml(p.proto)} (${escapeHtml(p.service)} ${escapeHtml(p.version||"")})</div>`).join(""));
+  if(data.endpoints&&data.endpoints.length) sec.push(`<div class="mem-sec e">[Endpoint web]</div>`+data.endpoints.slice(0,8).map(e=>`<div class="mem-row">• ${escapeHtml(e.url)} [${e.status_code}]</div>`).join(""));
+  if(data.credentials&&data.credentials.length) sec.push(`<div class="mem-sec c">[Credentials &amp; flags]</div>`+data.credentials.slice(0,8).map(c=>`<div class="mem-row">• [${escapeHtml(c.secret_type)}] ${escapeHtml(c.username?c.username+":":"")}<b>${escapeHtml(c.secret)}</b></div>`).join(""));
+  if(data.findings&&data.findings.length) sec.push(`<div class="mem-sec f">[Lỗ hổng]</div>`+data.findings.slice(0,8).map(f=>`<div class="mem-row">• [${escapeHtml(f.severity)}] ${escapeHtml(f.title)}</div>`).join(""));
+  $("mem-list").innerHTML=sec.length?sec.join("<div style='height:3px'></div>"):`<span style="color:var(--muted)">Chưa có dữ kiện trong SQLite.</span>`;
+}
+async function loadCampaignMemory(){ if(state.demo){ if(demoMem) renderMem(demoMem); return; }
+  try{ const target=($("in-target").value||"").trim(); const q=target?`?target=${encodeURIComponent(target)}`:"";
+    const res=await api(`/api/v1/memory/summary${q}`,{headers:headers()}); if(!res.ok) return; renderMem(await res.json());
+  }catch(_){ } }
+
+/* ==========================================================================
+ * Command Palette (Ctrl/Cmd+K)
+ * ========================================================================== */
+const PAL_CMDS=[
+  { cmd:"/start", desc:"Khởi chạy phiên pentest thật", run:()=>start() },
+  { cmd:"/stop", desc:"Dừng phiên đang chạy", run:()=>stop() },
+  { cmd:"/demo", desc:"Chạy phiên DEMO mô phỏng (offline)", run:()=>runDemo() },
+  { cmd:"/target", desc:"Đặt target/scope", arg:true, run:(v)=>{ $("in-target").value=v; saveCfg(); scramble($("target-label"),v||"—"); toast("Target = "+v); } },
+  { cmd:"/model", desc:"Đặt model LLM", arg:true, run:(v)=>{ $("in-model").value=v; saveCfg(); toast("Model = "+v); } },
+  { cmd:"/agent", desc:"Chọn agent (theo value)", arg:true, run:(v)=>{ $("in-agent").value=v; saveCfg(); toast("Agent = "+v); } },
+  { cmd:"/turns", desc:"Đặt ngân sách lượt", arg:true, run:(v)=>{ $("in-turns").value=parseInt(v,10)||30; saveCfg(); renderTurns(); } },
+  { cmd:"/clear", desc:"Xóa log terminal", run:()=>clearLog() },
+  { cmd:"/report", desc:"Tải báo cáo .md của phiên", run:()=>downloadReport() },
+  { cmd:"/redact", desc:"Bật/tắt che credential", run:()=>{ $("chk-redact").click(); } },
+];
+let palActive=0, palFiltered=PAL_CMDS;
+function openPalette(){ $("palette-ov").classList.add("show"); $("pal-input").value=""; renderPal(); setTimeout(()=>$("pal-input").focus(),30); }
+function closePalette(){ $("palette-ov").classList.remove("show"); }
+function renderPal(){ const q=$("pal-input").value.trim().toLowerCase(); const firstTok=q.split(/\s+/)[0];
+  palFiltered=PAL_CMDS.filter(c=>!firstTok||c.cmd.includes(firstTok)||c.desc.toLowerCase().includes(q)); palActive=0;
+  $("pal-list").innerHTML=palFiltered.map((c,i)=>`<div class="pal-item${i===0?" active":""}" data-i="${i}"><span class="pal-cmd">${c.cmd}${c.arg?" &lt;…&gt;":""}</span><span class="pal-desc">${c.desc}</span></div>`).join("")||`<div class="pal-item"><span class="pal-desc">Không có lệnh khớp</span></div>`; }
+function palRunActive(){ const raw=$("pal-input").value.trim(); const c=palFiltered[palActive]; if(!c) return;
+  let arg=""; if(c.arg){ const m=raw.match(/^\S+\s+(.*)$/); arg=m?m[1].trim():""; if(!arg){ $("pal-input").value=c.cmd+" "; return; } }
+  closePalette(); c.run(arg); }
+
+/* ==========================================================================
+ * Wiring
+ * ========================================================================== */
+$("btn-start").addEventListener("click",start);
+$("btn-stop").addEventListener("click",stop);
+$("btn-demo").addEventListener("click",runDemo);
+$("btn-clear").addEventListener("click",clearLog);
+$("btn-palette").addEventListener("click",openPalette);
+$("chk-redact").addEventListener("change",(e)=>{ state.redact=e.target.checked; $("redact-label").classList.toggle("on",state.redact); saveCfg();
+  addLog("sys",state.redact?"🔒 BẬT che nhạy cảm (áp cho dòng mới).":"⚠ TẮT che nhạy cảm — credential sẽ hiện ở dòng mới."); });
+
+state.filterKinds=new Set(LOG_KINDS);
+$("log-search").addEventListener("input",applyLogFilter);
+$("log-chips").addEventListener("click",(e)=>{ const chip=e.target.closest(".chip"); if(!chip||!chip.dataset.kind) return; const k=chip.dataset.kind;
+  if(state.filterKinds.has(k)) state.filterKinds.delete(k); else state.filterKinds.add(k); chip.classList.toggle("on",state.filterKinds.has(k)); applyLogFilter(); });
+$("btn-copy-visible").addEventListener("click",()=>{ const parts=[]; for(const ln of logEl.children) if(ln.style.display!=="none") parts.push(ln.innerText);
+  navigator.clipboard.writeText(parts.join("\n")).then(()=>toast("Đã chép log hiển thị.")).catch(e=>toast("Không chép được: "+e.message)); });
+
+$("find-list").addEventListener("click",(e)=>{ const card=e.target.closest(".find-card"); if(!card) return; const f=findingById(card.id); if(!f) return;
+  const act=e.target.getAttribute("data-act"); if(act==="fp"){ f.fp=!f.fp; renderFindingCard(f); recountSeverity(); } else if(act==="jump") jumpToLog(f); });
+$("find-list").addEventListener("change",(e)=>{ if(e.target.getAttribute("data-act")!=="sev") return; const card=e.target.closest(".find-card"); if(!card) return; const f=findingById(card.id); if(!f) return; f.override=e.target.value||null; renderFindingCard(f); recountSeverity(); });
+$("btn-find-md").addEventListener("click",exportFindingsMd);
+$("btn-find-json").addEventListener("click",exportFindingsJson);
+$("btn-report").addEventListener("click",downloadReport);
+async function downloadReport(){ const sid=state.sessionId; if(!sid){ toast("Chưa có phiên."); return; }
+  if(state.demo){ toast("Phiên DEMO — dùng xuất .md/.json ở Findings."); return; }
+  try{ const res=await api(`/api/v1/audit/sessions/${encodeURIComponent(sid)}/report`,{headers:headers()}); if(!res.ok){ toast("Chưa có báo cáo (HTTP "+res.status+")."); return; }
+    downloadBlob(redact(await res.text()),`pentest_report_${sid.slice(0,8)}.md`,"text/markdown"); }catch(e){ toast("Lỗi tải báo cáo: "+e.message); } }
+
+$("btn-clear-mem").addEventListener("click",async()=>{ if(state.demo){ toast("DEMO: bỏ qua xóa SQLite."); return; } if(!confirm("Xóa toàn bộ Trí nhớ chiến dịch (SQLite)?")) return;
+  try{ await api("/api/v1/memory",{method:"DELETE",headers:headers()}); loadCampaignMemory(); }catch(_){ } });
+
+logEl.addEventListener("scroll",()=>{ const atBottom=logEl.scrollHeight-logEl.scrollTop-logEl.clientHeight<40; state.autoscroll=atBottom; $("scroll-btn").classList.toggle("show",!atBottom); });
+$("scroll-btn").addEventListener("click",()=>{ state.autoscroll=true; logEl.scrollTop=logEl.scrollHeight; $("scroll-btn").classList.remove("show"); });
+
+["in-api","in-agent","in-model","in-turns","in-target","in-prompt"].forEach(id=>{ const evt=(id==="in-target"||id==="in-prompt"||id==="in-api"||id==="in-model")?"input":"change"; $(id).addEventListener(evt,saveCfg); });
+$("in-target").addEventListener("input",()=>{ if(swarm.target){ swarm.target.label2.textContent=truncate($("in-target").value||"scope",22); } });
+$("in-api").addEventListener("change",()=>{ loadAgents(); loadModels(); });
+$("in-key").addEventListener("change",()=>{ loadAgents(); loadModels(); });
+
+/* palette events */
+$("pal-input").addEventListener("input",renderPal);
+$("pal-input").addEventListener("keydown",(e)=>{ if(e.key==="ArrowDown"){ e.preventDefault(); palActive=Math.min(palActive+1,palFiltered.length-1); syncPal(); }
+  else if(e.key==="ArrowUp"){ e.preventDefault(); palActive=Math.max(palActive-1,0); syncPal(); }
+  else if(e.key==="Enter"){ e.preventDefault(); palRunActive(); } else if(e.key==="Escape"){ e.preventDefault(); closePalette(); } });
+function syncPal(){ $("pal-list").querySelectorAll(".pal-item").forEach((el,i)=>el.classList.toggle("active",i===palActive)); }
+$("pal-list").addEventListener("click",(e)=>{ const it=e.target.closest(".pal-item"); if(!it||it.dataset.i==null) return; palActive=parseInt(it.dataset.i,10); palRunActive(); });
+$("palette-ov").addEventListener("click",(e)=>{ if(e.target.id==="palette-ov") closePalette(); });
+
+/* global shortcuts */
+document.addEventListener("keydown",(e)=>{
+  if((e.ctrlKey||e.metaKey)&&(e.key==="k"||e.key==="K")){ e.preventDefault(); $("palette-ov").classList.contains("show")?closePalette():openPalette(); return; }
+  if((e.ctrlKey||e.metaKey)&&e.key==="Enter"){ e.preventDefault(); if(!state.running) start(); return; }
+  if(e.key==="Escape"&&state.running){ e.preventDefault(); stop(); }
+});
+
+/* ==========================================================================
+ * Init
+ * ========================================================================== */
+loadCfg(); renderPhases(); initSwarm(); setupModelCombo(); swarmTick();
+scramble($("target-label"), $("in-target").value||"—", 500);
+setLoot();
+if(!location.protocol.startsWith("http")||location.hostname===""){ setConn("bad","mở trực tiếp (file) — bật server để kết nối API, hoặc bấm ◈ Demo"); }
+else { loadAgents(); loadModels(); checkRunnerStatus(); setInterval(checkRunnerStatus,4000); loadCampaignMemory(); setInterval(loadCampaignMemory,5000); }
+// resize swarm viewBox theo panel để node không méo
+function fitSwarm(){ const b=$("swarm-body"); if(!b||!swarm.svg) return; swarm.svg.setAttribute("viewBox",`0 0 ${swarm.W} ${swarm.H}`); }
+window.addEventListener("resize",fitSwarm); fitSwarm();
+</script>
+</body>
+</html>

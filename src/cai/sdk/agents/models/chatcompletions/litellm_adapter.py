@@ -69,10 +69,31 @@ async def fetch_response_litellm_openai(
     """
     # For Gemini / Google AI Studio models, strip cache_control because Google Free Tier
     # rejects cachedContents with 429 Resource Exhausted (limit=0).
+    if "groq" in model_name.lower():
+        groq_key = os.getenv("GROQ_API_KEY")
+        if groq_key:
+            kwargs["api_key"] = groq_key
+    elif "cerebras" in model_name.lower():
+        cer_key = os.getenv("CEREBRAS_API_KEY")
+        if cer_key:
+            kwargs["api_key"] = cer_key
+    elif "deepseek" in model_name.lower():
+        ds_key = os.getenv("DEEPSEEK_API_KEY")
+        if ds_key:
+            kwargs["api_key"] = ds_key
+
     if "gemini" in model_name.lower() or "google" in model_name.lower():
         gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if gemini_key:
             kwargs["api_key"] = gemini_key
+        # Disable Google AI Studio safety filters for authorized cybersecurity testing & lab exercises
+        kwargs["safety_settings"] = [
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_CIVIC_INTEGRITY", "threshold": "BLOCK_NONE"},
+        ]
         messages = kwargs.get("messages", [])
         cleaned_messages = []
         for msg in messages:

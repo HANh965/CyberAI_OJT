@@ -613,6 +613,14 @@ def update_agent_models_recursively(agent, new_model, visited=None):
         # If agent.model is a Model object, update its model attribute
         elif hasattr(agent.model, "model"):
             agent.model.model = new_model
+            _m_lower = str(new_model).lower()
+            _is_cloud = any(_m_lower.startswith(p) for p in ("groq/", "cerebras/", "deepseek/", "gemini/", "openai/", "anthropic/"))
+            if hasattr(agent.model, "is_ollama"):
+                agent.model.is_ollama = not _is_cloud and (
+                    (os.getenv("OLLAMA") is not None and os.getenv("OLLAMA").lower() != "false")
+                    or _m_lower.startswith("ollama")
+                    or "qwen" in _m_lower
+                )
             # Also ensure the agent name is set correctly in the model
             if hasattr(agent.model, "agent_name"):
                 agent.model.agent_name = agent.name

@@ -859,7 +859,41 @@ async def generic_linux_command(
 
     # Compress large output to prevent context overflow
     # User already sees full output via streaming, this only affects what goes to model
+
+# In-memory history for anti-loop circuit breaker: stores (command, result_summary, timestamp)
+_COMMAND_RUN_HISTORY: list[tuple[str, str, float]] = []
+
+def _check_circuit_breaker(command: str, result: str) -> str:
+    global _COMMAND_RUN_HISTORY
+    import time
+    now = time.time()
+    _COMMAND_RUN_HISTORY = [item for item in _COMMAND_RUN_HISTORY if now - item[2] < 120][-10:]
+    res_summary = (result or "").strip()[:200]
+    _COMMAND_RUN_HISTORY.append((command.strip(), res_summary, now))
+    same_cmd_count = sum(1 for c, _, _ in _COMMAND_RUN_HISTORY if c == command.strip())
+    is_404 = ("404" in res_summary or "Not Found" in res_summary)
+    recent_404_count = sum(1 for _, r, _ in _COMMAND_RUN_HISTORY[-4:] if ("404" in r or "Not Found" in r))
+    if same_cmd_count >= 2 or (is_404 and recent_404_count >= 2):
+        warning = (
+            "\n\n"
+            "================================================================================\n"
+            "[CIRCUIT BREAKER - CANH BAO LAP LENH HOAC KET QUA KHONG DOI (404/LOI)]\n"
+            "CANH BAO: Lenh ban vua chay dang lap lai hoac nhan cung ma loi (404 / Khong tim thay / That bai).\n"
+            "HAY SU DUNG CONG CU DANG CO MOT CACH THONG MINH VA DOI CHIEN THUAT NGAY (PIVOT):\n"
+            "1. NEU CHUA BIET LO HONG (Black-box pentest / Muc tieu mo):\n"
+            "   - BAT BUOC phai tiep tuc do tim, nhung PHAI DOI PHUONG PHAP, khong go lai lenh cu:\n"
+            "     + Neu endpoint bi 404: Hay kiem tra trang chu '/', file 'robots.txt', hoac dung ffuf/gobuster de do tim dung duong dan that (loc bo 404: -fc 404).\n"
+            "     + Neu dung curl: DUNG GET `curl -s -i <URL>` (tuyet doi khong dung HEAD `curl -I`). Doc source HTML tim the <form>, the <input>, file .js hoac endpoint API.\n"
+            "     + Kiem tra cac dich vu khac: Dung nmap de tim xem con cong nao khac dang mo khong.\n"
+            "2. NEU DA BIET SAN LO HONG (CTF/Lab da neu ro ten lo hong, vd CSRF):\n"
+            "   - Khong can do quet lan man! Chuyen THANG sang tao ma khai thac (vi du form HTML auto-submit CSRF, payload SQLi) va thuc thi ngay lap tuc!\n"
+            "================================================================================"
+        )
+        return (result or "") + warning
+    return result
+
     result = _compress_output_for_model(result, command)
+    result = _check_circuit_breaker(command, result)
 
     return result
 

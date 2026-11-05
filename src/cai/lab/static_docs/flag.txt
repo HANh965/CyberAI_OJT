@@ -1,0 +1,2 @@
+Congratulations! You read the secret file.
+FLAG{mock_lfi_secret_file_read}

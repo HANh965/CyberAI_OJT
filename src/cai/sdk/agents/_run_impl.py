@@ -724,6 +724,10 @@ class RunImpl:
                         span_fn.span_data.input = tool_call.arguments
 
                     try:
+                        try:
+                            setattr(func_tool, '_last_args', tool_call.arguments)
+                        except Exception:
+                            pass
                         _, _, result = await asyncio.gather(
                             hooks.on_tool_start(context_wrapper, agent, func_tool),
                             (

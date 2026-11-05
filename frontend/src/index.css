@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #070a0f;
+  color: #d7dee8;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+}
+
+/* Custom Scrollbar for Cyberpunk Aesthetic */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #090e17;
+}
+::-webkit-scrollbar-thumb {
+  background: #1b2636;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2b3b52;
+}
+
+/* Cyber Glow Classes */
+.glow-neon {
+  box-shadow: 0 0 12px rgba(61, 220, 132, 0.4);
+}
+.glow-cyan {
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+}
+.glow-red {
+  box-shadow: 0 0 12px rgba(255, 51, 102, 0.4);
+}
+
+/* Glassmorphism Panel */
+.cyber-panel {
+  background: rgba(12, 17, 26, 0.75);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(29, 40, 58, 0.8);
+}
+
+/* Scanline Effect */
+.cyber-scanlines {
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.25) 50%
+  ), linear-gradient(
+    90deg,
+    rgba(255, 0, 0, 0.03),
+    rgba(0, 255, 0, 0.01),
+    rgba(0, 0, 255, 0.03)
+  );
+  background-size: 100% 3px, 6px 100%;
+  pointer-events: none;
+}
+

@@ -113,14 +113,14 @@ export const ControlRail: React.FC = () => {
             onChange={(e) => setAgent(e.target.value)}
             className="w-full bg-cyber-panel2 border border-cyber-border rounded-lg px-2.5 py-1.5 text-xs text-cyber-text focus:outline-none focus:border-cyber-cyan"
           >
-            <option value="">(tự động — theo nhiệm vụ)</option>
-            <optgroup label="⭐ Nhóm Agent Tác Chiến Tiêu Biểu">
-              <option value="kali_pentester_agent">Kali Pentester (Độc lập — Chạy trực tiếp Kali VM)</option>
-              <option value="red_team_swarm_agent">Swarm Orchestrator (Đa Agent phối hợp)</option>
-              <option value="autonomous_pentester_agent">Autonomy Master (Tự động đa vòng)</option>
-              <option value="web_pentester_agent">Web Pentester (Kiểm thử ứng dụng Web)</option>
-              <option value="ctf_agent">CTF Agent (Chuyên giải quyết challenge/flag)</option>
-              <option value="apt_agent">APT Simulation Agent</option>
+            <optgroup label="⭐ Khuyên dùng (Đơn Agent - Trực tiếp Kali VM)">
+              <option value="kali_pentester_agent">🎯 Kali Pentester (Agent chính — Thao tác trực tiếp Kali VM)</option>
+              <option value="web_pentester_agent">🌐 Web Pentester (Chuyên sâu kiểm thử Web/API)</option>
+              <option value="ctf_agent">🚩 CTF Agent (Chuyên giải mã Flag & Challenge)</option>
+            </optgroup>
+            <optgroup label="🧪 Thử nghiệm đa Agent ảo (Simulation)">
+              <option value="red_team_swarm_agent">Swarm Orchestrator (Mô phỏng phối hợp nhiều vai trò ảo)</option>
+              <option value="apt_agent">APT Simulation Agent (Mô phỏng tấn công diện rộng)</option>
             </optgroup>
             {availableAgents.length > 0 && (
               <optgroup label="📋 Toàn bộ Agent hệ thống">

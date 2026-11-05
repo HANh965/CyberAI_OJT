@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Shield, Radio, Terminal, Cpu, Clock, RefreshCw } from "lucide-react";
+import { Shield, Radio, Terminal, Cpu, Clock, RefreshCw, Bot } from "lucide-react";
 import { useCampaignStore } from "../../stores/useCampaignStore";
 
 export const Navbar: React.FC = () => {
-  const { runnerStatus, target, isRunning, fetchRunnerStatus, fetchGraph, show3DMatrix, toggle3DMatrix } = useCampaignStore();
+  const { runnerStatus, target, isRunning, fetchRunnerStatus, fetchGraph, show3DMatrix, toggle3DMatrix, agent, availableAgents } = useCampaignStore();
+  const activeAgentName = availableAgents.find((a) => a.key === agent)?.name || (agent === "kali_pentester_agent" ? "Kali Pentester" : agent || "Kali Pentester");
   const [seconds, setSeconds] = useState(0);
 
   useEffect(() => {
@@ -56,9 +57,9 @@ export const Navbar: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 px-3 py-1 rounded-md bg-cyber-panel2 border border-cyber-border">
-          <Cpu className="w-3.5 h-3.5 text-cyber-cyan" />
-          <span className="text-cyber-muted">SWARM:</span>
-          <span className="text-cyber-neon font-medium">4 Specialists Active</span>
+          <Bot className="w-3.5 h-3.5 text-cyber-cyan" />
+          <span className="text-cyber-muted">AGENT:</span>
+          <span className="text-cyber-neon font-medium">{activeAgentName}</span>
         </div>
       </div>
 

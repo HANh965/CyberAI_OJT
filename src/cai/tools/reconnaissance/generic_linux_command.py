@@ -29,7 +29,22 @@ def _resolve_optional_shell_cwd(working_directory: str | None) -> tuple[str | No
     """
     if working_directory is None or not str(working_directory).strip():
         return None, None
-    path = os.path.abspath(os.path.expanduser(str(working_directory).strip()))
+    raw = str(working_directory).strip()
+
+    # Remote Kali runner takes precedence: remote paths exist on Kali VM, not host filesystem
+    try:
+        from cai.runner.manager import runner_manager
+        if runner_manager.is_active():
+            return raw, None
+    except Exception:
+        pass
+
+    # On Windows, POSIX paths starting with '/' or '~' (e.g. /tmp, /home/kali)
+    # cannot exist on Windows root, but are valid for Linux containers/WSL/runners.
+    if sys.platform == "win32" and (raw.startswith("/") or raw.startswith("~")):
+        return raw, None
+
+    path = os.path.abspath(os.path.expanduser(raw))
     if not os.path.exists(path):
         return None, f"Error: working_directory does not exist: {path}"
     if not os.path.isdir(path):

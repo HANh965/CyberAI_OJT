@@ -1418,8 +1418,13 @@ async def run_command_async(
                             chunk=chunk,
                         ))
 
+                runner_cmd = command
+                if workspace_dir and str(workspace_dir).strip():
+                    wd = str(workspace_dir).strip()
+                    runner_cmd = f"cd {wd} && {command}"
+
                 res = await runner_manager.execute_async(
-                    command=command,
+                    command=runner_cmd,
                     timeout=timeout,
                     stream_callback=_runner_stream_cb if stream else None,
                 )
@@ -1471,6 +1476,8 @@ async def run_command_async(
             return result
 
         local_cwd = workspace_dir if workspace_dir is not None else _get_workspace_dir()
+        if sys.platform == "win32" and (not os.path.exists(local_cwd) or not os.path.isdir(local_cwd)):
+            local_cwd = _get_workspace_dir()
         result = await _run_local_async(
             command, stdout=stdout, timeout=timeout, stream=stream,
             call_id=call_id, tool_name=tool_name,
@@ -1673,8 +1680,13 @@ def run_command(
                         update_tool_streaming(tool_name, tool_args, chunk, call_id, token_info)
 
                 start_ts = time.time()
+                runner_cmd = command
+                if workspace_dir and str(workspace_dir).strip():
+                    wd = str(workspace_dir).strip()
+                    runner_cmd = f"cd {wd} && {command}"
+
                 res = runner_manager.execute_sync(
-                    command=command,
+                    command=runner_cmd,
                     timeout=timeout,
                     stream_callback=_sync_stream_cb if stream else None,
                 )
@@ -1986,6 +1998,8 @@ def run_command(
             return f"Started async session {label} locally. Use this ID to interact."
 
         local_cwd = workspace_dir if workspace_dir is not None else _get_workspace_dir()
+        if sys.platform == "win32" and (not os.path.exists(local_cwd) or not os.path.isdir(local_cwd)):
+            local_cwd = _get_workspace_dir()
         result = _run_local(
             command, stdout, timeout, stream=stream, call_id=call_id,
             tool_name=tool_name, workspace_dir=local_cwd, custom_args=args,

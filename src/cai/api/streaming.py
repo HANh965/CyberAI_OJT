@@ -276,7 +276,15 @@ async def sse_stream_via_hooks(starting_agent, input_items, *, context=None, max
                     hooks=hooks,
                 )
             except MaxTurnsExceeded:
-                last_res = RunResult(current_agent, [], [])
+                last_res = RunResult(
+                    input=current_input,
+                    new_items=[],
+                    raw_responses=[],
+                    final_output=None,
+                    _last_agent=current_agent,
+                    input_guardrail_results=[],
+                    output_guardrail_results=[],
+                )
 
             # Extract assistant message from this cycle
             cycle_msg: str | None = None

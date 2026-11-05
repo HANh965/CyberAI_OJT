@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Bot, Terminal, Wrench, ShieldAlert, CheckCircle2, ChevronRight, Copy, Search, Trash2 } from "lucide-react";
+import { Bot, Terminal, Wrench, ShieldAlert, CheckCircle2, ChevronRight, Copy, Search, Trash2, Download, Lock, Unlock, ArrowDown } from "lucide-react";
 import { useCampaignStore } from "../../stores/useCampaignStore";
 import { AgentStep } from "../../types";
 
 export const AgentLogStream: React.FC = () => {
-  const { agentSteps, isRunning, clearAgentSteps } = useCampaignStore();
+  const { agentSteps, isRunning, clearAgentSteps, sessionId, isRedactEnabled, toggleRedact } = useCampaignStore();
   const [filterKind, setFilterKind] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const endRef = useRef<HTMLDivElement>(null);

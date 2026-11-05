@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Radio, Database, Copy, Check } from "lucide-react";
 import {
   Play,
   Square,
@@ -32,6 +33,11 @@ export const ControlRail: React.FC = () => {
     availableAgents,
     availableModels,
     isRedactEnabled,
+    runnerStatus,
+    memoryRaw,
+    findings,
+    credentials,
+    clearMemory,
     setTarget,
     setPrompt,
     setAgent,
@@ -45,6 +51,10 @@ export const ControlRail: React.FC = () => {
     toggleLab,
     fillMockLabTarget,
   } = useCampaignStore();
+
+  const [copiedRunnerCmd, setCopiedRunnerCmd] = useState(false);
+  const [showRunnerCmd, setShowRunnerCmd] = useState(false);
+  const [showMemoryDetails, setShowMemoryDetails] = useState(false);
 
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [apiBaseUrl, setApiBaseUrl] = useState("");
@@ -268,6 +278,134 @@ export const ControlRail: React.FC = () => {
           {isRunning && <span className="w-2 h-2 rounded-full bg-cyber-cyan animate-ping" />}
           <span>{statusText}</span>
         </div>
+      </div>
+
+      {/* KALI VM SANDBOX CARD (Parity with Classic) */}
+      <div className="p-3.5 rounded-xl bg-cyber-panel2 border-l-4 border-l-cyber-neon border-y border-r border-cyber-border space-y-2 font-mono text-xs">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${runnerStatus?.active ? "bg-cyber-neon animate-pulse" : "bg-cyber-muted"}`} />
+            <span className="font-semibold text-cyber-text">Kali VM Sandbox</span>
+          </div>
+          <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${runnerStatus?.active ? "bg-cyber-neon/15 text-cyber-neon border border-cyber-neon/30" : "bg-cyber-panel text-cyber-muted border border-cyber-border"}`}>
+            {runnerStatus?.active ? "Online" : "Offline"}
+          </span>
+        </div>
+
+        <div className="text-[11px] text-cyber-muted leading-relaxed">
+          {runnerStatus?.active && runnerStatus.runners && runnerStatus.runners.length > 0 ? (
+            <span>
+              Kết nối: <b className="text-cyber-text">{runnerStatus.runners[0].hostname}</b> ({runnerStatus.runners[0].ip}) &bull; <b className="text-cyber-neon">{runnerStatus.runners[0].tools?.length || 28} công cụ</b> sẵn sàng
+            </span>
+          ) : (
+            <span>Chưa kết nối máy ảo Kali. Lệnh agent sẽ chạy cục bộ fallback.</span>
+          )}
+        </div>
+
+        <details className="mt-1 text-[11px] cursor-pointer" open={showRunnerCmd} onToggle={(e: any) => setShowRunnerCmd(e.target.open)}>
+          <summary className="text-cyber-cyan hover:underline select-none">Lệnh 1-dòng chạy trên Kali</summary>
+          <div className="mt-2 p-2 rounded bg-[#06090e] border border-cyber-border space-y-1.5">
+            <div className="text-[10px] text-cyber-muted">Chạy trên terminal Kali Linux:</div>
+            {(() => {
+              const host = runnerStatus?.preferred_ip || "192.168.106.1";
+              const token = runnerStatus?.token || "cai-kali-secret";
+              const cmd = `curl -s http://${host}:8000/cai_runner.py -o cai_runner.py && python3 cai_runner.py --server http://${host}:8000 --token ${token}`;
+              return (
+                <div className="flex items-center gap-1.5">
+                  <code className="flex-1 p-1.5 rounded bg-black text-cyber-neon text-[10px] break-all select-all font-mono">
+                    {cmd}
+                  </code>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(cmd);
+                      setCopiedRunnerCmd(true);
+                      setTimeout(() => setCopiedRunnerCmd(false), 2000);
+                    }}
+                    className="p-1.5 rounded bg-cyber-panel border border-cyber-border text-cyber-muted hover:text-cyber-neon"
+                    title="Sao chép lệnh"
+                  >
+                    {copiedRunnerCmd ? <Check className="w-3.5 h-3.5 text-cyber-neon" /> : <Copy className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              );
+            })()}
+            <div className="text-[9px] text-cyber-muted">(Đổi IP thành card mạng Windows nối với máy ảo nếu cần)</div>
+          </div>
+        </details>
+      </div>
+
+      {/* SQLITE CAMPAIGN MEMORY CARD (Parity with Classic) */}
+      <div className="p-3.5 rounded-xl bg-cyber-panel2 border-l-4 border-l-cyber-cyan border-y border-r border-cyber-border space-y-2 font-mono text-xs">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Database className="w-3.5 h-3.5 text-cyber-cyan" />
+            <span className="font-semibold text-cyber-text">🧠 Trí nhớ chiến dịch (SQLite)</span>
+          </div>
+          <button
+            onClick={clearMemory}
+            className="px-2 py-0.5 rounded text-[10px] bg-cyber-panel border border-cyber-border text-cyber-muted hover:text-cyber-red hover:border-cyber-red/40 transition-all"
+            title="Xóa toàn bộ dữ kiện đã ghi nhớ trong cơ sở dữ liệu"
+          >
+            Xóa
+          </button>
+        </div>
+
+        <div className="text-[11px] text-cyber-muted">
+          {memoryRaw?.stats ? (
+            <span>
+              <b className="text-cyber-text">{memoryRaw.stats.hosts || 0}</b> host &bull; <b className="text-cyber-text">{memoryRaw.stats.ports || 0}</b> cổng &bull; <b className="text-cyber-amber">{memoryRaw.stats.credentials || 0}</b> cred/flag &bull; <b className="text-cyber-red">{memoryRaw.stats.findings || 0}</b> lỗ hổng
+            </span>
+          ) : (
+            <span>0 host &bull; 0 cổng &bull; 0 cred/flag &bull; 0 lỗ hổng</span>
+          )}
+        </div>
+
+        <details className="mt-1 text-[11px] cursor-pointer" open={showMemoryDetails} onToggle={(e: any) => setShowMemoryDetails(e.target.open)}>
+          <summary className="text-cyber-cyan hover:underline select-none">Xem dữ kiện đã ghi nhớ</summary>
+          <div className="mt-2 p-2 rounded bg-[#06090e] border border-cyber-border space-y-2 max-h-48 overflow-y-auto text-[11px]">
+            {/* Findings */}
+            <div>
+              <div className="text-cyber-red font-bold text-[10px] uppercase">[Lỗ hổng &amp; Phát hiện]</div>
+              {findings.length === 0 ? (
+                <div className="text-cyber-muted text-[10px] pl-2">&bull; Chưa có lỗ hổng</div>
+              ) : (
+                findings.map((f, i) => (
+                  <div key={i} className="text-cyber-muted pl-2 truncate">
+                    &bull; <b className="text-cyber-red">[{f.severity}]</b> {f.title} ({f.host})
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Credentials */}
+            <div>
+              <div className="text-cyber-amber font-bold text-[10px] uppercase">[Credentials &amp; Flags]</div>
+              {credentials.length === 0 ? (
+                <div className="text-cyber-muted text-[10px] pl-2">&bull; Chưa có cờ hay credentials</div>
+              ) : (
+                credentials.map((c, i) => (
+                  <div key={i} className="text-cyber-amber pl-2 truncate">
+                    &bull; [{c.secret_type}] {c.host}: {c.username ? `${c.username}:` : ""}{c.secret}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Hosts */}
+            <div>
+              <div className="text-cyber-cyan font-bold text-[10px] uppercase">[Hosts &amp; Cổng]</div>
+              {memoryRaw?.hosts && memoryRaw.hosts.length > 0 ? (
+                memoryRaw.hosts.map((h: any, i: number) => (
+                  <div key={i} className="text-cyber-muted pl-2 truncate">
+                    &bull; {h.host} {h.hostname ? `(${h.hostname})` : ""}
+                  </div>
+                ))
+              ) : (
+                <div className="text-cyber-muted text-[10px] pl-2">&bull; Chưa có host</div>
+              )}
+            </div>
+          </div>
+        </details>
       </div>
 
       {/* 7. Switch View: Classic 2D Link */}

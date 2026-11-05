@@ -1,5 +1,7 @@
 import React, { useState } from "react";
-import { Bot, Terminal, History, Maximize2, Minimize2 } from "lucide-react";
+import { Bot, Terminal, History, Maximize2, Minimize2, Network, ShieldAlert } from "lucide-react";
+import { Mindmap2D } from "../mindmap/Mindmap2D";
+import { FindingsTriageTab } from "./FindingsTriageTab";
 import { LiveTerminal } from "./LiveTerminal";
 import { AgentLogStream } from "./AgentLogStream";
 import { AuditHistoryDeck } from "./AuditHistoryDeck";
@@ -49,6 +51,30 @@ export const DockedWorkspace: React.FC<{ isStandalone?: boolean }> = ({ isStanda
           </button>
 
           <button
+            onClick={() => setActiveDockTab("mindmap")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-t text-xs font-semibold transition-all border-b-2 ${
+              activeDockTab === "mindmap"
+                ? "bg-cyber-panel text-purple-400 border-purple-400"
+                : "text-cyber-muted hover:text-cyber-text border-transparent"
+            }`}
+          >
+            <Network className="w-3.5 h-3.5 text-purple-400" />
+            <span>🕸️ Sơ đồ Cây Tấn Công (2D)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveDockTab("triage")}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-t text-xs font-semibold transition-all border-b-2 ${
+              activeDockTab === "triage"
+                ? "bg-cyber-panel text-cyber-red border-cyber-red"
+                : "text-cyber-muted hover:text-cyber-text border-transparent"
+            }`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5 text-cyber-red" />
+            <span>🔎 Phát hiện & Triage</span>
+          </button>
+
+          <button
             onClick={() => setActiveDockTab("history")}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-t text-xs font-semibold transition-all border-b-2 ${
               activeDockTab === "history"
@@ -57,7 +83,7 @@ export const DockedWorkspace: React.FC<{ isStandalone?: boolean }> = ({ isStanda
             }`}
           >
             <History className="w-3.5 h-3.5 text-cyber-amber" />
-            <span>📜 Lịch sử các phiên pentest</span>
+            <span>📜 Lịch sử các phiên</span>
             {auditSessions.length > 0 && (
               <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-cyber-amber/10 text-cyber-amber border border-cyber-amber/30">
                 {auditSessions.length}
@@ -83,6 +109,12 @@ export const DockedWorkspace: React.FC<{ isStandalone?: boolean }> = ({ isStanda
         </div>
         <div className={`h-full ${activeDockTab === "terminal" ? "block" : "hidden"}`}>
           <LiveTerminal />
+        </div>
+        <div className={`h-full ${activeDockTab === "mindmap" ? "block" : "hidden"}`}>
+          <Mindmap2D />
+        </div>
+        <div className={`h-full ${activeDockTab === "triage" ? "block" : "hidden"}`}>
+          <FindingsTriageTab />
         </div>
         <div className={`h-full ${activeDockTab === "history" ? "block" : "hidden"}`}>
           <AuditHistoryDeck />

@@ -139,7 +139,7 @@ export const LiveTerminal: React.FC = () => {
   ];
 
   return (
-    <div className="h-64 border-t border-cyber-border bg-cyber-panel flex flex-col font-mono">
+    <div className="flex-1 h-full min-h-0 bg-cyber-panel flex flex-col font-mono">
       {/* Terminal Top Bar */}
       <div className="h-9 px-3 border-b border-cyber-border bg-cyber-panel2 flex items-center justify-between text-xs">
         <div className="flex items-center gap-2">

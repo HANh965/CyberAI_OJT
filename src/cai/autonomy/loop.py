@@ -308,11 +308,11 @@ class AutonomyController:
                     "[AUTONOMY LOOP — CHƯA ĐẠT MỤC TIÊU FLAG] Bạn kết luận thành công nhưng chưa trích xuất được Flag format {...} "
                     "hoặc phiên đăng nhập thực sự. "
                     "LƯU Ý: Chuỗi 'admin' xuất hiện trong HTML form gốc 'Goal: Login as admin' là tiêu đề, KHÔNG PHẢI đã đăng nhập! "
-                    "Khi gặp form đăng nhập SQLi, nếu nháy đơn (') trả về 'Wrong username or password', BẮT BUỘC THỬ SANG NHÁY KÉP ("):\n"
-                    "curl -s -i -X POST "<target>" --data-urlencode 'username=admin" -- -' --data-urlencode 'password=123'\n"
-                    "hoặc 'username=admin" #', 'username=admin" OR "1"="1'. Hãy thực thi ngay và lấy Flag thực sự!"
+                    "Khi gặp form đăng nhập SQLi, nếu nháy đơn (') trả về 'Wrong username or password', BẮT BUỘC THỬ SANG NHÁY KÉP (\"):\n"
+                    "curl -s -i -X POST \"<target>\" --data-urlencode 'username=admin\" -- -' --data-urlencode 'password=123'\n"
+                    "hoặc 'username=admin\" #', 'username=admin\" OR \"1\"=\"1'. Hãy thực thi ngay và lấy Flag thực sự!"
                 )
-                cp = self.save_checkpoint("Chặn Agent kết luận sớm khi chưa có Flag — Tiếp tục chu kỳ với gợi ý nháy kép (").")
+                cp = self.save_checkpoint("Chặn Agent kết luận sớm khi chưa có Flag — Tiếp tục chu kỳ với gợi ý nháy kép (\").")
                 return True, prompt, cp
 
             self._advance_phase_to("report")

@@ -62,7 +62,7 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   target: "http://127.0.0.1:8888",
   prompt: "Khảo sát và đánh giá bảo mật toàn diện mục tiêu http://127.0.0.1:8888. Tìm kiếm các lỗ hổng OWASP Top 10, khai thác để chiếm cờ CTF và lập báo cáo.",
   agent: "kali_pentester_agent",
-  model: "",
+  model: "gemini/gemini-3.5-flash-lite",
   maxTurns: 30,
   isAutonomy: true,
   isRunning: false,

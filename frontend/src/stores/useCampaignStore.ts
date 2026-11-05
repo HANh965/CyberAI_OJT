@@ -238,21 +238,25 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
       set({ sessionId: sid, statusText: "Đang tấn công mục tiêu..." });
 
       // 3. Dispatch execution and consume real-time SSE stream
-      set({ activeDockTab: "agent_log",
-  memoryRaw: null,
-  show3DMatrix: false, agentSteps: [] });
+      set({ activeDockTab: "agent_log", agentSteps: [] });
+      const composed = target ? `${prompt}\n\n[Target / scope: ${target}]` : prompt;
       const streamRes = await fetch(`/api/v1/sessions/${sid}/messages/stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "text/event-stream",
+        },
         body: JSON.stringify({
-          content: prompt,
-          context: { target, autonomy: isAutonomy },
+          input: composed,
+          context: { target: target || null, autonomy: isAutonomy },
           max_turns: maxTurns,
         }),
       });
 
       if (!streamRes.ok || !streamRes.body) {
-        set({ isRunning: false, statusText: "Lỗi kết nối SSE stream" });
+        const errText = await streamRes.text().catch(() => "");
+        console.error("SSE stream error:", streamRes.status, errText);
+        set({ isRunning: false, statusText: `Lỗi kết nối SSE (${streamRes.status})` });
         return;
       }
 

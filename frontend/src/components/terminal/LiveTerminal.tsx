@@ -12,6 +12,8 @@ export const LiveTerminal: React.FC = () => {
   const lastSeqRef = useRef<number>(0);
   const [inputVal, setInputVal] = useState("");
   const [isExecuting, setIsExecuting] = useState(false);
+  const [cmdHistory, setCmdHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const { target, runnerStatus, fetchGraph, fetchMemorySummary } = useCampaignStore();
 
   useEffect(() => {
@@ -94,6 +96,8 @@ export const LiveTerminal: React.FC = () => {
     if (!cmd || isExecuting) return;
 
     setIsExecuting(true);
+    setCmdHistory((prev) => [cmd, ...prev.filter((c) => c !== cmd)]);
+    setHistoryIndex(-1);
     setInputVal("");
 
     try {
@@ -182,14 +186,34 @@ export const LiveTerminal: React.FC = () => {
         className="h-10 border-t border-cyber-border bg-[#080d14] px-3 flex items-center gap-2"
       >
         <span className="text-xs font-bold text-cyber-neon whitespace-nowrap">
-          {runnerStatus?.active ? "kali@kali-vm:~#" : "local@cai-host:~$"}
+          {runnerStatus?.active ? "[MANUAL] kali@kali-vm:~#" : "[MANUAL] local@host:~#"}
         </span>
         <input
           type="text"
           value={inputVal}
           onChange={(e) => setInputVal(e.target.value)}
-          placeholder="Nhập lệnh bash/zsh (Enter để chạy)..."
-          className="flex-1 bg-transparent border-none text-xs text-cyber-text font-mono focus:outline-none"
+          onKeyDown={(e) => {
+            if (e.key === "ArrowUp") {
+              e.preventDefault();
+              if (cmdHistory.length > 0 && historyIndex < cmdHistory.length - 1) {
+                const nextIdx = historyIndex + 1;
+                setHistoryIndex(nextIdx);
+                setInputVal(cmdHistory[nextIdx]);
+              }
+            } else if (e.key === "ArrowDown") {
+              e.preventDefault();
+              if (historyIndex > 0) {
+                const nextIdx = historyIndex - 1;
+                setHistoryIndex(nextIdx);
+                setInputVal(cmdHistory[nextIdx]);
+              } else if (historyIndex === 0) {
+                setHistoryIndex(-1);
+                setInputVal("");
+              }
+            }
+          }}
+          placeholder="Nhập lệnh bash/zsh trực tiếp tới Kali VM (Enter để chạy, ↑/↓ lịch sử lệnh)..."
+          className="flex-1 bg-transparent border-none text-xs text-cyber-text font-mono focus:outline-none placeholder:text-cyber-muted/60"
         />
         <button
           type="submit"

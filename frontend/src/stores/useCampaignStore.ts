@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { AttackGraphData, GraphNode, RunnerStatus, MockLabStatus, FindingItem, CredentialItem, AgentItem, ModelItem } from "../types";
+import { AttackGraphData, GraphNode, RunnerStatus, MockLabStatus, FindingItem, CredentialItem, AgentItem, ModelItem, AgentStep, AuditSessionItem } from "../types";
 
 interface CampaignState {
   target: string;
@@ -23,11 +23,17 @@ interface CampaignState {
   availableAgents: AgentItem[];
   availableModels: ModelItem[];
   isRedactEnabled: boolean;
+  agentSteps: AgentStep[];
+  auditSessions: AuditSessionItem[];
+  activeDockTab: "terminal" | "agent_log" | "history";
 
   // Actions
   toggleRedact: () => void;
+  setActiveDockTab: (tab: "terminal" | "agent_log" | "history") => void;
+  clearAgentSteps: () => void;
   fetchAgents: () => Promise<void>;
   fetchModels: () => Promise<void>;
+  fetchAuditSessions: () => Promise<void>;
   clearTerminalLogs: () => Promise<void>;
   setTarget: (target: string) => void;
   setPrompt: (prompt: string) => void;
@@ -69,8 +75,22 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   availableAgents: [],
   availableModels: [],
   isRedactEnabled: true,
+  agentSteps: [],
+  auditSessions: [],
+  activeDockTab: "agent_log",
 
   toggleRedact: () => set((s) => ({ isRedactEnabled: !s.isRedactEnabled })),
+  setActiveDockTab: (tab) => set({ activeDockTab: tab }),
+  clearAgentSteps: () => set({ agentSteps: [] }),
+
+  fetchAuditSessions: async () => {
+    try {
+      const res = await fetch("/api/v1/audit/sessions");
+      if (!res.ok) return;
+      const data: AuditSessionItem[] = await res.json();
+      set({ auditSessions: data || [] });
+    } catch (_) {}
+  },
 
   fetchAgents: async () => {
     try {
@@ -199,8 +219,9 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
       const sid = sessData.session_id || sessData.id;
       set({ sessionId: sid, statusText: "Đang tấn công mục tiêu..." });
 
-      // 3. Dispatch execution
-      fetch(`/api/v1/sessions/${sid}/messages/stream`, {
+      // 3. Dispatch execution and consume real-time SSE stream
+      set({ activeDockTab: "agent_log", agentSteps: [] });
+      const streamRes = await fetch(`/api/v1/sessions/${sid}/messages/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -208,13 +229,117 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
           context: { target, autonomy: isAutonomy },
           max_turns: maxTurns,
         }),
-      }).then(() => {
-        set({ isRunning: false, statusText: "Chiến dịch hoàn tất" });
-        get().fetchGraph();
-        get().fetchMemorySummary();
-      }).catch(() => {
-        set({ isRunning: false, statusText: "Phiên kết thúc hoặc bị gián đoạn" });
       });
+
+      if (!streamRes.ok || !streamRes.body) {
+        set({ isRunning: false, statusText: "Lỗi kết nối SSE stream" });
+        return;
+      }
+
+      const reader = streamRes.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let sepIndex: number;
+        while ((sepIndex = buffer.indexOf("\n\n")) >= 0) {
+          const frame = buffer.slice(0, sepIndex);
+          buffer = buffer.slice(sepIndex + 2);
+
+          let eventName = "message";
+          const dataLines: string[] = [];
+          for (const line of frame.split("\n")) {
+            if (line.startsWith("event:")) {
+              eventName = line.slice(6).trim();
+            } else if (line.startsWith("data:")) {
+              dataLines.push(line.slice(5).trim());
+            }
+          }
+
+          if (dataLines.length === 0) continue;
+          let parsedData: any;
+          try {
+            parsedData = JSON.parse(dataLines.join("\n"));
+          } catch (_) {
+            parsedData = { raw: dataLines.join("\n") };
+          }
+
+          const now = new Date();
+          const timeStr = now.toTimeString().split(" ")[0];
+          const stepId = Math.random().toString(36).substring(2, 9);
+
+          if (eventName === "reasoning_step") {
+            const stepItem: AgentStep = {
+              id: stepId,
+              time: timeStr,
+              type: parsedData.type || "message",
+              agent: parsedData.agent,
+              tool: parsedData.tool,
+              args: parsedData.args,
+              command: parsedData.command,
+              output: parsedData.output,
+              text: parsedData.text,
+              phase: parsedData.phase,
+              phase_label: parsedData.phase_label,
+              cycle: parsedData.cycle,
+              max_cycles: parsedData.max_cycles,
+              turns_used: parsedData.turns_used,
+              max_turns: parsedData.max_turns,
+              reason: parsedData.reason,
+            };
+
+            set((state) => ({
+              agentSteps: [...state.agentSteps, stepItem],
+              statusText: parsedData.reason || (parsedData.tool ? `Đang chạy: ${parsedData.tool}` : state.statusText),
+              turnsUsed: parsedData.turns_used !== undefined ? parsedData.turns_used : state.turnsUsed,
+              currentPhase: parsedData.phase || state.currentPhase,
+            }));
+          } else if (eventName === "final") {
+            const finalMsg = parsedData.final_message || (parsedData.final_output ? JSON.stringify(parsedData.final_output, null, 2) : "");
+            const stepItem: AgentStep = {
+              id: stepId,
+              time: timeStr,
+              type: "final",
+              final_message: finalMsg,
+              final_output: parsedData.final_output,
+            };
+
+            set((state) => ({
+              agentSteps: [...state.agentSteps, stepItem],
+              isRunning: false,
+              statusText: "Chiến dịch hoàn tất",
+            }));
+
+            get().fetchGraph();
+            get().fetchMemorySummary();
+            get().fetchAuditSessions();
+            try { await reader.cancel(); } catch (_) {}
+            return;
+          } else if (eventName === "error") {
+            const stepItem: AgentStep = {
+              id: stepId,
+              time: timeStr,
+              type: "error",
+              text: parsedData.message || JSON.stringify(parsedData),
+            };
+
+            set((state) => ({
+              agentSteps: [...state.agentSteps, stepItem],
+              isRunning: false,
+              statusText: `Lỗi: ${stepItem.text}`,
+            }));
+          }
+        }
+      }
+
+      set({ isRunning: false, statusText: "Chiến dịch hoàn tất" });
+      get().fetchGraph();
+      get().fetchMemorySummary();
+      get().fetchAuditSessions();
 
     } catch (err: any) {
       set({ isRunning: false, statusText: `Lỗi: ${err.message}` });

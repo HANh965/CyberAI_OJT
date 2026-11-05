@@ -2,12 +2,12 @@ import React, { useEffect } from "react";
 import { Navbar } from "./components/layout/Navbar";
 import { ControlRail } from "./components/layout/ControlRail";
 import { TriageDeck } from "./components/layout/TriageDeck";
-import { LiveTerminal } from "./components/terminal/LiveTerminal";
+import { DockedWorkspace } from "./components/terminal/DockedWorkspace";
 import { CyberMatrix3D } from "./components/cyber3d/CyberMatrix3D";
 import { useCampaignStore } from "./stores/useCampaignStore";
 
 export const App: React.FC = () => {
-  const { fetchGraph, fetchRunnerStatus, fetchLabStatus, fetchMemorySummary, fetchAgents, fetchModels } = useCampaignStore();
+  const { fetchGraph, fetchRunnerStatus, fetchLabStatus, fetchMemorySummary, fetchAgents, fetchModels, fetchAuditSessions } = useCampaignStore();
 
   useEffect(() => {
     // Initial data fetch
@@ -17,6 +17,7 @@ export const App: React.FC = () => {
     fetchMemorySummary();
     fetchAgents();
     fetchModels();
+    fetchAuditSessions();
 
     // Periodic telemetry sync
     const interval = setInterval(() => {
@@ -47,7 +48,7 @@ export const App: React.FC = () => {
           </div>
 
           {/* Bottom: Docked xterm.js Terminal */}
-          <LiveTerminal />
+          <DockedWorkspace />
         </div>
 
         {/* Right: Intelligence & Triage Deck */}

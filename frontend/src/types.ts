@@ -101,3 +101,37 @@ export interface ModelItem {
   category?: string | null;
   description?: string | null;
 }
+
+export interface AgentStep {
+  id: string;
+  time: string;
+  type: "call" | "output" | "message" | "autonomy_checkpoint" | "final" | "error";
+  agent?: string;
+  tool?: string;
+  command?: string;
+  args?: any;
+  output?: string;
+  text?: string;
+  phase?: string;
+  phase_label?: string;
+  cycle?: number;
+  max_cycles?: number;
+  turns_used?: number;
+  max_turns?: number;
+  reason?: string;
+  final_message?: string;
+  final_output?: any;
+}
+
+export interface AuditSessionItem {
+  session_id: string;
+  created_at: string;
+  updated_at?: string;
+  agent: string;
+  model: string;
+  target: string;
+  event_count: number;
+  tool_executions: number;
+  status: string;
+  has_report: boolean;
+}

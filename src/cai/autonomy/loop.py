@@ -94,7 +94,7 @@ class AutonomyController:
 
     _PORT_RE = re.compile(r"^(\d+/(?:tcp|udp))\s+open\s+([^\n\r]+)", re.MULTILINE | re.IGNORECASE)
     _FLAG_RE = re.compile(
-        r"\b(?:flag|CTF|HTB|THM|picoCTF|FLAG)\{[A-Za-z0-9_@!#$%^&*()+=\-\.?/\\]{3,120}\}"
+        r"\b(?:flag|CTF|HTB|THM|picoCTF|FLAG|CBJS|[A-Za-z0-9_]{2,15})\{[A-Za-z0-9_@!#$%^&*()+=\-\.\?/\\]{3,120}\}", re.IGNORECASE
     )
     _CVE_RE = re.compile(r"\b(CVE-\d{4}-\d{4,7})\b", re.IGNORECASE)
     _URL_RE = re.compile(r"(https?://[a-zA-Z0-9.\-_]+(?::\d+)?(?:/[^\s\"'<>)]*)?)")
@@ -301,6 +301,20 @@ class AutonomyController:
 
         # 3. Check explicit completion marker from Agent
         if self._COMPLETE_RE.search(msg) and len(self.state.command_history) >= 1:
+            # Check if agent claimed completion prematurely without capturing CTF flag
+            is_flag_goal = bool(re.search(r"\b(flag|cờ|ctf|level\d|challenge|admin)\b", self.state.initial_prompt, re.IGNORECASE))
+            if is_flag_goal and not self.state.captured_flags and self.state.cycle < self.state.max_cycles:
+                prompt = (
+                    "[AUTONOMY LOOP — CHƯA ĐẠT MỤC TIÊU FLAG] Bạn kết luận thành công nhưng chưa trích xuất được Flag format {...} "
+                    "hoặc phiên đăng nhập thực sự. "
+                    "LƯU Ý: Chuỗi 'admin' xuất hiện trong HTML form gốc 'Goal: Login as admin' là tiêu đề, KHÔNG PHẢI đã đăng nhập! "
+                    "Khi gặp form đăng nhập SQLi, nếu nháy đơn (') trả về 'Wrong username or password', BẮT BUỘC THỬ SANG NHÁY KÉP ("):\n"
+                    "curl -s -i -X POST "<target>" --data-urlencode 'username=admin" -- -' --data-urlencode 'password=123'\n"
+                    "hoặc 'username=admin" #', 'username=admin" OR "1"="1'. Hãy thực thi ngay và lấy Flag thực sự!"
+                )
+                cp = self.save_checkpoint("Chặn Agent kết luận sớm khi chưa có Flag — Tiếp tục chu kỳ với gợi ý nháy kép (").")
+                return True, prompt, cp
+
             self._advance_phase_to("report")
             cp = self.save_checkpoint("Agent đã xác nhận hoàn tất toàn bộ quy trình kiểm thử [ASSESSMENT_COMPLETE].")
             return False, None, cp

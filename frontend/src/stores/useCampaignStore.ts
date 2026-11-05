@@ -26,10 +26,13 @@ interface CampaignState {
   agentSteps: AgentStep[];
   auditSessions: AuditSessionItem[];
   activeDockTab: "terminal" | "agent_log" | "history";
+  show3DMatrix: boolean;
 
   // Actions
   toggleRedact: () => void;
   setActiveDockTab: (tab: "terminal" | "agent_log" | "history") => void;
+  toggle3DMatrix: () => void;
+  setShow3DMatrix: (val: boolean) => void;
   clearAgentSteps: () => void;
   fetchAgents: () => Promise<void>;
   fetchModels: () => Promise<void>;
@@ -78,9 +81,12 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   agentSteps: [],
   auditSessions: [],
   activeDockTab: "agent_log",
+  show3DMatrix: false,
 
   toggleRedact: () => set((s) => ({ isRedactEnabled: !s.isRedactEnabled })),
   setActiveDockTab: (tab) => set({ activeDockTab: tab }),
+  toggle3DMatrix: () => set((s) => ({ show3DMatrix: !s.show3DMatrix })),
+  setShow3DMatrix: (val: boolean) => set({ show3DMatrix: val }),
   clearAgentSteps: () => set({ agentSteps: [] }),
 
   fetchAuditSessions: async () => {
@@ -220,7 +226,8 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
       set({ sessionId: sid, statusText: "Đang tấn công mục tiêu..." });
 
       // 3. Dispatch execution and consume real-time SSE stream
-      set({ activeDockTab: "agent_log", agentSteps: [] });
+      set({ activeDockTab: "agent_log",
+  show3DMatrix: false, agentSteps: [] });
       const streamRes = await fetch(`/api/v1/sessions/${sid}/messages/stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

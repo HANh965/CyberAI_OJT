@@ -7,7 +7,7 @@ import { CyberMatrix3D } from "./components/cyber3d/CyberMatrix3D";
 import { useCampaignStore } from "./stores/useCampaignStore";
 
 export const App: React.FC = () => {
-  const { fetchGraph, fetchRunnerStatus, fetchLabStatus, fetchMemorySummary, fetchAgents, fetchModels, fetchAuditSessions } = useCampaignStore();
+  const { fetchGraph, fetchRunnerStatus, fetchLabStatus, fetchMemorySummary, fetchAgents, fetchModels, fetchAuditSessions, show3DMatrix } = useCampaignStore();
 
   useEffect(() => {
     // Initial data fetch
@@ -40,15 +40,23 @@ export const App: React.FC = () => {
         {/* Left: Mission Control Rail */}
         <ControlRail />
 
-        {/* Center: 3D Cyber Matrix Canvas + Docked Live Terminal */}
-        <div className="flex-1 flex flex-col min-w-0 relative">
-          {/* 3D Attack Topography Canvas */}
-          <div className="flex-1 relative overflow-hidden">
-            <CyberMatrix3D />
-          </div>
-
-          {/* Bottom: Docked xterm.js Terminal */}
-          <DockedWorkspace />
+        {/* Center: 3D Cyber Matrix Canvas OR Full-height Docked Workspace */}
+        <div className="flex-1 flex flex-col min-w-0 relative h-full overflow-hidden">
+          {show3DMatrix ? (
+            <>
+              {/* 3D Attack Topography Canvas */}
+              <div className="flex-1 relative overflow-hidden min-h-0">
+                <CyberMatrix3D />
+              </div>
+              {/* Bottom: Docked xterm.js Terminal */}
+              <DockedWorkspace isStandalone={false} />
+            </>
+          ) : (
+            /* Full-Height Standalone Workspace */
+            <div className="flex-1 h-full min-h-0 flex flex-col overflow-hidden">
+              <DockedWorkspace isStandalone={true} />
+            </div>
+          )}
         </div>
 
         {/* Right: Intelligence & Triage Deck */}

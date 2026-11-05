@@ -3,7 +3,7 @@ import { Shield, Radio, Terminal, Cpu, Clock, RefreshCw } from "lucide-react";
 import { useCampaignStore } from "../../stores/useCampaignStore";
 
 export const Navbar: React.FC = () => {
-  const { runnerStatus, target, isRunning, fetchRunnerStatus, fetchGraph } = useCampaignStore();
+  const { runnerStatus, target, isRunning, fetchRunnerStatus, fetchGraph, show3DMatrix, toggle3DMatrix } = useCampaignStore();
   const [seconds, setSeconds] = useState(0);
 
   useEffect(() => {
@@ -87,6 +87,19 @@ export const Navbar: React.FC = () => {
             {isRunnerOnline ? `Kali VM (${runnerInfo?.tools?.length || 28} tools)` : "Kali VM Offline"}
           </span>
         </div>
+
+        {/* Toggle 3D Matrix Button */}
+        <button
+          onClick={toggle3DMatrix}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono transition-all ${
+            show3DMatrix
+              ? "bg-cyber-neon/15 border-cyber-neon text-cyber-neon shadow-neon"
+              : "bg-cyber-panel2 border-cyber-border text-cyber-muted hover:text-cyber-neon hover:border-cyber-neon/50"
+          }`}
+          title="Bật/Tắt hiển thị ô 3D Matrix"
+        >
+          <span>{show3DMatrix ? "🌐 Ẩn ô 3D Matrix" : "🌐 Hiện ô 3D Matrix"}</span>
+        </button>
 
         {/* Switch to Classic UI */}
         <a

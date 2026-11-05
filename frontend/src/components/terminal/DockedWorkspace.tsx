@@ -5,14 +5,14 @@ import { AgentLogStream } from "./AgentLogStream";
 import { AuditHistoryDeck } from "./AuditHistoryDeck";
 import { useCampaignStore } from "../../stores/useCampaignStore";
 
-export const DockedWorkspace: React.FC = () => {
-  const { activeDockTab, setActiveDockTab, agentSteps, auditSessions } = useCampaignStore();
+export const DockedWorkspace: React.FC<{ isStandalone?: boolean }> = ({ isStandalone = false }) => {
+  const { activeDockTab, setActiveDockTab, agentSteps, auditSessions, show3DMatrix, toggle3DMatrix } = useCampaignStore();
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
     <div
-      className={`border-t border-cyber-border bg-cyber-panel flex flex-col font-mono transition-all duration-200 ${
-        isExpanded ? "h-[450px]" : "h-72"
+      className={`bg-cyber-panel flex flex-col font-mono transition-all duration-200 ${
+        isStandalone ? "flex-1 h-full min-h-0 border-t-0" : isExpanded ? "h-[500px] border-t border-cyber-border" : "h-72 border-t border-cyber-border"
       }`}
     >
       {/* Docked Navigation Tabs */}

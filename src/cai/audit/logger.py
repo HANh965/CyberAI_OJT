@@ -296,13 +296,31 @@ class AuditLogger:
                     }
                 )
 
-            # Heuristics for high severity keywords
-            if re.search(r"\b(sqli|sql injection|remote code execution|unauthorized access|default password)\b", out, re.I):
+            # Targeted detection for actual vulnerability evidence (flags, SQL errors, auth bypass)
+            flag_match = re.search(r"\b([A-Za-z0-9_]{2,8}\{[^\}\s]{4,80}\})", out)
+            if flag_match:
+                flag_val = flag_match.group(1)
                 findings.append(
                     {
                         "level": "CRITICAL",
-                        "title": f"Potential High Severity Vulnerability in {te.get('tool')}",
-                        "source": te.get("command", "")[:60],
+                        "title": f"Captured CTF / System Flag: {flag_val}",
+                        "source": te.get("command", "") or te.get("tool", "exploit"),
+                    }
+                )
+            elif re.search(r"(wow you can log in as admin|logged in as admin|welcome to the admin panel|flag:)", out, re.I):
+                findings.append(
+                    {
+                        "level": "CRITICAL",
+                        "title": "Authentication Bypass Succeeded (Admin Access Granted)",
+                        "source": te.get("command", "") or te.get("tool", "exploit"),
+                    }
+                )
+            elif re.search(r"(you have an error in your sql syntax|syntax error.*mysql|warning.*mysql_|unclosed quotation mark|ora-\d{5})", out, re.I):
+                findings.append(
+                    {
+                        "level": "HIGH",
+                        "title": "SQL Database Syntax Error Leaked (SQL Injection Confirmed)",
+                        "source": te.get("command", "") or te.get("tool", "scan"),
                     }
                 )
 
@@ -391,12 +409,12 @@ class AuditOutputHandler:
             etype = type(event).__name__
             sid = getattr(event, "agent_id", "") or get_active_session_id()
             if etype == "ToolStartEvent":
-                audit_logger.log_tool_start(sid, getattr(event, "tool_name", ""), "", getattr(event, "call_id", ""))
+                audit_logger.log_tool_start(sid, getattr(event, "tool_name", ""), getattr(event, "command", ""), getattr(event, "call_id", ""))
             elif etype == "ToolCompleteEvent":
                 audit_logger.log_tool_complete(
                     sid,
                     getattr(event, "tool_name", ""),
-                    "",
+                    getattr(event, "command", ""),
                     getattr(event, "output", ""),
                     getattr(event, "exit_code", 0),
                     getattr(event, "duration_seconds", 0.0),
@@ -406,7 +424,7 @@ class AuditOutputHandler:
                 audit_logger.log_tool_complete(
                     sid,
                     getattr(event, "tool_name", ""),
-                    "",
+                    getattr(event, "command", ""),
                     f"[ERROR] {getattr(event, 'error', '')}",
                     1,
                     0.0,

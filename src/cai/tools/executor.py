@@ -1330,7 +1330,7 @@ async def run_command_async(
         tool_name = f"{cmd_name}_command" if cmd_name else "command"
 
     # Emit ToolStartEvent [T]
-    OUTPUT.emit(ToolStartEvent(tool_name=tool_name, call_id=call_id or ""))
+    OUTPUT.emit(ToolStartEvent(tool_name=tool_name, call_id=call_id or "", command=command))
 
     _start_ts = time.time()
 
@@ -1513,7 +1513,7 @@ async def run_command_async(
             result = apply_packet_capture_notice(command, result)
 
         OUTPUT.emit(ToolCompleteEvent(
-            tool_name=tool_name, call_id=call_id or "",
+            tool_name=tool_name, call_id=call_id or "", command=command,
             output=str(result)[:500] if result else "",
             duration_seconds=time.time() - _start_ts,
         ))
@@ -1521,7 +1521,7 @@ async def run_command_async(
 
     except Exception as exc:
         OUTPUT.emit(ToolErrorEvent(
-            tool_name=tool_name, call_id=call_id or "",
+            tool_name=tool_name, call_id=call_id or "", command=command,
             error=str(exc)[:500], error_type=type(exc).__name__,
         ))
         raise

@@ -49,6 +49,7 @@ class ToolStartEvent(OutputEvent):
 
     tool_name: str = ""
     call_id: str = ""
+    command: str = ""
 
 
 @dataclass
@@ -66,6 +67,7 @@ class ToolCompleteEvent(OutputEvent):
 
     tool_name: str = ""
     call_id: str = ""
+    command: str = ""
     output: str = ""
     exit_code: int = 0
     duration_seconds: float = 0.0
@@ -77,6 +79,7 @@ class ToolErrorEvent(OutputEvent):
 
     tool_name: str = ""
     call_id: str = ""
+    command: str = ""
     error: str = ""
     error_type: str = ""
 

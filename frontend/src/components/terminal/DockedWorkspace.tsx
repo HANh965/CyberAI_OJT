@@ -91,3 +91,4 @@ export const DockedWorkspace: React.FC = () => {
     </div>
   );
 };
+

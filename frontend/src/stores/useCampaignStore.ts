@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { AttackGraphData, GraphNode, RunnerStatus, MockLabStatus, FindingItem, CredentialItem } from "../types";
+import { AttackGraphData, GraphNode, RunnerStatus, MockLabStatus, FindingItem, CredentialItem, AgentItem, ModelItem } from "../types";
 
 interface CampaignState {
   target: string;
@@ -20,8 +20,15 @@ interface CampaignState {
   labStatus: MockLabStatus | null;
   findings: FindingItem[];
   credentials: CredentialItem[];
+  availableAgents: AgentItem[];
+  availableModels: ModelItem[];
+  isRedactEnabled: boolean;
 
   // Actions
+  toggleRedact: () => void;
+  fetchAgents: () => Promise<void>;
+  fetchModels: () => Promise<void>;
+  clearTerminalLogs: () => Promise<void>;
   setTarget: (target: string) => void;
   setPrompt: (prompt: string) => void;
   setAgent: (agent: string) => void;
@@ -59,6 +66,35 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
   labStatus: null,
   findings: [],
   credentials: [],
+  availableAgents: [],
+  availableModels: [],
+  isRedactEnabled: true,
+
+  toggleRedact: () => set((s) => ({ isRedactEnabled: !s.isRedactEnabled })),
+
+  fetchAgents: async () => {
+    try {
+      const res = await fetch("/api/v1/agents");
+      if (!res.ok) return;
+      const data = await res.json();
+      set({ availableAgents: data.agents || [] });
+    } catch (_) {}
+  },
+
+  fetchModels: async () => {
+    try {
+      const res = await fetch("/api/v1/models");
+      if (!res.ok) return;
+      const data = await res.json();
+      set({ availableModels: data.models || [] });
+    } catch (_) {}
+  },
+
+  clearTerminalLogs: async () => {
+    try {
+      await fetch("/api/v1/runner/terminal/logs", { method: "DELETE" });
+    } catch (_) {}
+  },
 
   setTarget: (target) => set({ target }),
   setPrompt: (prompt) => set({ prompt }),

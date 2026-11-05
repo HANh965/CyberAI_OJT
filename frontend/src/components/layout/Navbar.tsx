@@ -88,6 +88,15 @@ export const Navbar: React.FC = () => {
           </span>
         </div>
 
+        {/* Switch to Classic UI */}
+        <a
+          href="/ui/classic"
+          className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyber-panel2 border border-cyber-border text-xs font-mono text-cyber-muted hover:text-cyber-cyan hover:border-cyber-cyan/50 transition-all"
+          title="Mở giao diện Classic 2D"
+        >
+          <span>Giao diện Classic (2D)</span>
+        </a>
+
         {/* Refresh Graph button */}
         <button
           onClick={() => {

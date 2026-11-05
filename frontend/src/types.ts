@@ -86,3 +86,18 @@ export interface MockLabStatus {
   }>;
 }
 
+
+export interface AgentItem {
+  name: string;
+  key: string;
+  description?: string;
+  type?: string;
+  pattern_type?: string | null;
+}
+
+export interface ModelItem {
+  name: string;
+  provider?: string | null;
+  category?: string | null;
+  description?: string | null;
+}

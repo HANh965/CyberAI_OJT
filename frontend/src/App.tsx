@@ -7,7 +7,7 @@ import { CyberMatrix3D } from "./components/cyber3d/CyberMatrix3D";
 import { useCampaignStore } from "./stores/useCampaignStore";
 
 export const App: React.FC = () => {
-  const { fetchGraph, fetchRunnerStatus, fetchLabStatus, fetchMemorySummary } = useCampaignStore();
+  const { fetchGraph, fetchRunnerStatus, fetchLabStatus, fetchMemorySummary, fetchAgents, fetchModels } = useCampaignStore();
 
   useEffect(() => {
     // Initial data fetch
@@ -15,6 +15,8 @@ export const App: React.FC = () => {
     fetchRunnerStatus();
     fetchLabStatus();
     fetchMemorySummary();
+    fetchAgents();
+    fetchModels();
 
     // Periodic telemetry sync
     const interval = setInterval(() => {
